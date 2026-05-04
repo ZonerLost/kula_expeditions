@@ -19,7 +19,6 @@ class UnlockCodeView extends GetView<UnlockController> {
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBg,
-      bottomNavigationBar: _bottomNav(),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
@@ -101,45 +100,6 @@ class UnlockCodeView extends GetView<UnlockController> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _bottomNav() {
-    return Container(
-      height: 74,
-      decoration: const BoxDecoration(
-        color: AppColors.white,
-        border: Border(
-          top: BorderSide(color: AppColors.lightBorder),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _navItem(Icons.map_outlined, AppStrings.navMap, false),
-          _navItem(Icons.layers_outlined, AppStrings.navStages, false),
-          _navItem(Icons.person_pin_outlined, AppStrings.navPermit, false),
-          _navItem(Icons.lock_outline, AppStrings.navUnlock, true),
-        ],
-      ),
-    );
-  }
-
-  Widget _navItem(IconData icon, String title, bool selected) {
-    final color = selected ? AppColors.navSelected : AppColors.navUnselected;
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(icon, size: 20, color: color),
-        const SizedBox(height: 4),
-        Text(
-          title,
-          style: AppTextStyles.small.copyWith(
-            color: color,
-            fontSize: 10,
-          ),
-        ),
-      ],
     );
   }
 }

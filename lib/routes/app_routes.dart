@@ -1,6 +1,7 @@
 abstract class AppRoutes {
   static const String splash = '/splash';
   static const String onboarding = '/onboarding';
+  static const String shell = '/shell';
 
   static const String mapScreen = '/map-screen';
   static const String stages = '/stages';

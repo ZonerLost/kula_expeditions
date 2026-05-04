@@ -46,7 +46,7 @@ class OnboardingController extends GetxController {
     } else if (currentIndex.value == 1) {
       currentIndex.value = 2;
     } else {
-      Get.toNamed('/map-screen');
+      Get.offAllNamed('/shell');
     }
   }
   void secondaryAction() {

@@ -1,9 +1,6 @@
 import 'package:get/get.dart';
 import '../../../constants/app_imges.dart';
 import '../../../constants/app_strings.dart';
-import '../../../constants/bottom_nav_bar/bottom_nav_controller.dart';
-import '../../../constants/bottom_nav_bar/map_nav_item_model.dart';
-import '../../../routes/app_routes.dart';
 import '../model/map_marker_model.dart';
 
 enum MapBottomCardType {
@@ -15,8 +12,6 @@ enum MapBottomCardType {
 }
 
 class MapScreenController extends GetxController {
-  final bottomNavController = Get.find<BottomNavController>();
-
   final selectedChipIndex = 0.obs;
   final selectedMarker = Rxn<MapMarkerModel>();
   final lockedMarker = Rxn<MapMarkerModel>();
@@ -26,25 +21,6 @@ class MapScreenController extends GetxController {
     AppStrings.chipCamps,
     AppStrings.chipMountainPass,
     AppStrings.chipVillage,
-  ];
-
-  final navItems = <MapNavItemModel>[
-    MapNavItemModel(
-      label: AppStrings.navMap,
-      icon: AppImages.pinPoint,
-    ),
-    MapNavItemModel(
-      label: AppStrings.navStages,
-      icon: AppImages.layers,
-    ),
-    MapNavItemModel(
-      label: AppStrings.navPermit,
-      icon: AppImages.permit,
-    ),
-    MapNavItemModel(
-      label: AppStrings.navUnlock,
-      icon: AppImages.lock,
-    ),
   ];
 
   final markers = <MapMarkerModel>[
@@ -136,8 +112,6 @@ class MapScreenController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    bottomNavController.updateIndexFromRoute(AppRoutes.mapScreen);
-
     selectedMarker.value = defaultCheckpoint;
     currentCard.value = MapBottomCardType.selectedCheckpoint;
   }

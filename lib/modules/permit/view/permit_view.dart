@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../constants/app_button.dart';
 import '../../../constants/app_colors.dart';
-import '../../../constants/bottom_nav_bar/custom_bottom_nav_bar.dart';
 import '../../../constants/app_text_styles.dart';
 import '../../../extension/context_extension.dart';
 import '../controller/permit_controller.dart';
@@ -103,9 +102,6 @@ class PermitView extends GetView<PermitController> {
             ),
           ],
         ),
-      ),
-      bottomNavigationBar: CustomBottomNavBar(
-        items: controller.navItems,
       ),
     );
   }

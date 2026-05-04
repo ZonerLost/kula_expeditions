@@ -1,5 +1,6 @@
 import 'package:get/get_navigation/src/routes/get_route.dart';
 
+import '../modules/shell/main_shell_view.dart';
 import '../modules/hiking_crossing/binding/hiking_details_binding.dart';
 import '../modules/hiking_crossing/view/hiking_details_view.dart';
 import '../modules/map/binding/map_screen_binding.dart';
@@ -39,6 +40,10 @@ class AppPages {
       name: AppRoutes.onboarding,
       page: () => const OnboardingScreen(),
       binding: OnboardingBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.shell,
+      page: () => const MainShellView(),
     ),
     GetPage(
       name: AppRoutes.mapScreen,

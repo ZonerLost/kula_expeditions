@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../constants/app_colors.dart';
-import '../../../constants/bottom_nav_bar/custom_bottom_nav_bar.dart';
 import '../../../extension/context_extension.dart';
 import '../../../widgets/stage_item_card.dart';
 import '../../../widgets/stages_header.dart';
@@ -42,9 +41,6 @@ class StagesView extends GetView<StagesController> {
             ],
           ),
         ),
-      ),
-      bottomNavigationBar: CustomBottomNavBar(
-        items: controller.navItems,
       ),
     );
   }

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../constants/app_colors.dart';
 import '../../../constants/app_imges.dart';
-import '../../../constants/bottom_nav_bar/custom_bottom_nav_bar.dart';
 import '../../../constants/map_filter_chips.dart';
 import '../../../constants/map_floating_buttons.dart';
 import '../../../constants/map_marker_card.dart';
@@ -98,9 +97,6 @@ class MapScreenView extends GetView<MapScreenController> {
             }),
           ],
         ),
-      ),
-      bottomNavigationBar: CustomBottomNavBar(
-        items: controller.navItems,
       ),
     );
   }

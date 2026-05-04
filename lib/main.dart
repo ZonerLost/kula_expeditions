@@ -5,8 +5,6 @@ import 'package:kuala_exp/routes/app_routes.dart';
 
 import 'constants/bottom_nav_bar/bottom_nav_controller.dart';
 
-
-
 void main() {
   Get.put(BottomNavController(), permanent: true);
   runApp(const kuala_exp());
@@ -20,14 +18,8 @@ class kuala_exp extends StatelessWidget {
     return GetMaterialApp(
       title: 'Kula',
       debugShowCheckedModeBanner: false,
-
-      // Initial screen
       initialRoute: AppRoutes.splash,
-
-      // GetX routes
       getPages: AppPages.pages,
-
-      // Theme
       theme: ThemeData(
         fontFamily: "ZalandoSans",
         scaffoldBackgroundColor: Colors.white,
