@@ -11,6 +11,7 @@ class StageDetailModel {
   final String waterAndCamps;
   final String importantNotes;
   final String image;
+  final String pdfGuideUrl;
 
   const StageDetailModel({
     required this.title,
@@ -23,5 +24,6 @@ class StageDetailModel {
     required this.waterAndCamps,
     required this.importantNotes,
     required this.image,
+    required this.pdfGuideUrl,
   });
 }

@@ -10,11 +10,7 @@ class StageItemCard extends StatelessWidget {
   final StageModel stage;
   final VoidCallback onTap;
 
-  const StageItemCard({
-    super.key,
-    required this.stage,
-    required this.onTap,
-  });
+  const StageItemCard({super.key, required this.stage, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -25,18 +21,19 @@ class StageItemCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: const Color(0xFFDCDCDC),
-          ),
+          border: Border.all(color: const Color(0xFFDCDCDC)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _StageImage(imagePath: stage.image),
-            SizedBox(width: context.screenWidth * 0.03),
-            Expanded(
-              child: _StageInfo(stage: stage),
+            _StageImage(
+              imagePath: stage.coverImageUrl.isNotEmpty
+                  ? stage.coverImageUrl
+                  : AppImages.mountains,
+              isNetwork: stage.coverImageUrl.isNotEmpty,
             ),
+            SizedBox(width: context.screenWidth * 0.03),
+            Expanded(child: _StageInfo(stage: stage)),
             SizedBox(width: context.screenWidth * 0.02),
             if (stage.isLocked) const _LockedBadge(),
           ],
@@ -48,31 +45,43 @@ class StageItemCard extends StatelessWidget {
 
 class _StageImage extends StatelessWidget {
   final String imagePath;
+  final bool isNetwork;
 
-  const _StageImage({
-    required this.imagePath,
-  });
+  const _StageImage({required this.imagePath, this.isNetwork = false});
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),
-      child: Image.asset(
-        imagePath,
-        width: context.screenWidth * 0.16,
-        height: context.screenWidth * 0.16,
-        fit: BoxFit.cover,
-      ),
+      child: isNetwork
+          ? Image.network(
+              imagePath,
+              width: context.screenWidth * 0.16,
+              height: context.screenWidth * 0.16,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _fallback(context),
+            )
+          : Image.asset(
+              imagePath,
+              width: context.screenWidth * 0.16,
+              height: context.screenWidth * 0.16,
+              fit: BoxFit.cover,
+            ),
     );
   }
+
+  Widget _fallback(BuildContext context) => Image.asset(
+    AppImages.mountains,
+    width: context.screenWidth * 0.16,
+    height: context.screenWidth * 0.16,
+    fit: BoxFit.cover,
+  );
 }
 
 class _StageInfo extends StatelessWidget {
   final StageModel stage;
 
-  const _StageInfo({
-    required this.stage,
-  });
+  const _StageInfo({required this.stage});
 
   @override
   Widget build(BuildContext context) {
@@ -86,32 +95,40 @@ class _StageInfo extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          stage.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTextStyles.body.copyWith(
-            fontSize: context.screenWidth * 0.037,
-            fontWeight: FontWeight.w700,
-            color: AppColors.black,
-            height: 1.2,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                stage.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.body.copyWith(
+                  fontSize: context.screenWidth * 0.037,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.black,
+                  height: 1.2,
+                ),
+              ),
+            ),
+            SizedBox(width: context.screenWidth * 0.015),
+
+            CircleAvatar(
+              radius: context.screenWidth * 0.035,
+              backgroundColor: AppColors.floatingButtonIcon,
+              child: SvgPicture.asset(
+                AppImages.sign_board,
+                width: context.screenWidth * 0.04,
+                height: context.screenWidth * 0.04,
+              ),
+            ),
+          ],
         ),
         SizedBox(height: context.screenHeight * 0.004),
-        Text(
-          "Distance: ${stage.distance}",
-          style: smallStyle,
-        ),
+        Text("Distance: ${stage.distanceLabel}", style: smallStyle),
         SizedBox(height: context.screenHeight * 0.002),
-        Text(
-          "Estimated Time: ${stage.estimatedTime}",
-          style: smallStyle,
-        ),
+        Text("Estimated Time: ${stage.estimatedTimeLabel}", style: smallStyle),
         SizedBox(height: context.screenHeight * 0.002),
-        Text(
-          "Elevation: ${stage.elevation}",
-          style: smallStyle,
-        ),
+        Text("Elevation: ${stage.difficulty}", style: smallStyle),
       ],
     );
   }
@@ -134,7 +151,6 @@ class _LockedBadge extends StatelessWidget {
           AppImages.sign_board,
           width: context.screenWidth * 0.022,
           height: context.screenWidth * 0.022,
-
         ),
       ),
     );

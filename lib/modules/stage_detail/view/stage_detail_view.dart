@@ -89,10 +89,13 @@ class StageDetailView extends GetView<StageDetailController> {
                                   ),
                                 ),
                               ),
-                              SvgPicture.asset(
-                                AppImages.save_file,
-                                width: 18,
-                                height: 18,
+                              GestureDetector(
+                                onTap: controller.openPdf,
+                                child: SvgPicture.asset(
+                                  AppImages.save_file,
+                                  width: 18,
+                                  height: 18,
+                                ),
                               ),
                             ],
                           ),
@@ -107,10 +110,7 @@ class StageDetailView extends GetView<StageDetailController> {
                           ),
                           SizedBox(height: context.screenHeight * 0.025),
 
-                          _InfoBlock(
-                            title: 'Distance:',
-                            value: stage.distance,
-                          ),
+                          _InfoBlock(title: 'Distance:', value: stage.distance),
                           _InfoBlock(
                             title: 'Estimated Duration:',
                             value: stage.estimatedDuration,
@@ -178,10 +178,7 @@ class _InfoBlock extends StatelessWidget {
   final String title;
   final String value;
 
-  const _InfoBlock({
-    required this.title,
-    required this.value,
-  });
+  const _InfoBlock({required this.title, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -216,10 +213,7 @@ class _SectionText extends StatelessWidget {
   final String title;
   final String content;
 
-  const _SectionText({
-    required this.title,
-    required this.content,
-  });
+  const _SectionText({required this.title, required this.content});
 
   @override
   Widget build(BuildContext context) {

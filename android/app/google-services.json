@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "140039292531",
+    "project_id": "kula-expedition",
+    "storage_bucket": "kula-expedition.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:140039292531:android:01de14391b0bc00d770c06",
+        "android_client_info": {
+          "package_name": "com.example.kuala_exp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCcM6NS85OwTk9bg9hjUfWsHACbdqCihg4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

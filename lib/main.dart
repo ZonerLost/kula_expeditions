@@ -1,11 +1,15 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:kuala_exp/firebase_options.dart';
 import 'package:kuala_exp/routes/app_pages.dart';
 import 'package:kuala_exp/routes/app_routes.dart';
 
 import 'constants/bottom_nav_bar/bottom_nav_controller.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   Get.put(BottomNavController(), permanent: true);
   runApp(const kuala_exp());
 }

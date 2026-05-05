@@ -41,8 +41,8 @@ class ContactDocumentsView extends GetView<ContactDocumentsController> {
                     ),
                     const SizedBox(height: 6),
                     _readOnlyField(
-                      text: "Diablo@gmail.com",
-                      suffixText: "(default)",
+                      text: controller.displayEmail,
+                      suffixText: '(default)',
                     ),
                     const SizedBox(height: 18),
 
@@ -153,14 +153,18 @@ class ContactDocumentsView extends GetView<ContactDocumentsController> {
               ),
             ),
 
-            Container(
+            Obx(() => Container(
               padding: const EdgeInsets.fromLTRB(18, 8, 18, 16),
               color: AppColors.scaffoldBg,
               child: AppButton(
-                text: AppStrings.continueText,
-                onTap: controller.onContinueTap,
+                text: controller.isLoading.value
+                    ? 'Submitting...'
+                    : AppStrings.continueText,
+                onTap: controller.isLoading.value
+                    ? () {}
+                    : controller.onContinueTap,
               ),
-            ),
+            )),
           ],
         ),
       ),

@@ -1,6 +1,7 @@
 // lib/modules/stage_detail/controller/stage_detail_controller.dart
 
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../constants/app_imges.dart';
 import '../model/stage_detail_model.dart';
 
@@ -28,6 +29,16 @@ class StageDetailController extends GetxController {
       importantNotes: args?['importantNotes'] ??
           'Weather can change rapidly at higher elevations. Trail markings are red and white. Mobile signal is often unavailable along this stage.',
       image: args?['image'] ?? AppImages.mountains,
+      pdfGuideUrl: args?['pdfGuideUrl'] ?? '',
     );
+  }
+
+  Future<void> openPdf() async {
+    final url = stageDetail.pdfGuideUrl;
+    if (url.isEmpty) return;
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 }

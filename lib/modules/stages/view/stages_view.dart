@@ -25,18 +25,23 @@ class StagesView extends GetView<StagesController> {
               const StagesHeader(),
               SizedBox(height: context.screenHeight * 0.02),
               Expanded(
-                child: ListView.separated(
-                  itemCount: controller.stages.length,
-                  separatorBuilder: (_, __) =>
-                      SizedBox(height: context.screenHeight * 0.014),
-                  itemBuilder: (context, index) {
-                    final stage = controller.stages[index];
-                    return StageItemCard(
-                      stage: stage,
-                      onTap: () => controller.onStageTap(stage),
-                    );
-                  },
-                ),
+                child: Obx(() {
+                  if (controller.isLoading.value) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  return ListView.separated(
+                    itemCount: controller.stages.length,
+                    separatorBuilder: (_, __) =>
+                        SizedBox(height: context.screenHeight * 0.014),
+                    itemBuilder: (context, index) {
+                      final stage = controller.stages[index];
+                      return StageItemCard(
+                        stage: stage,
+                        onTap: () => controller.onStageTap(stage),
+                      );
+                    },
+                  );
+                }),
               ),
             ],
           ),
