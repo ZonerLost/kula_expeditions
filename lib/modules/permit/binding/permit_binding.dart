@@ -6,6 +6,8 @@ import '../controller/permit_controller.dart';
 class PermitBinding extends Bindings {
   @override
   void dependencies() {
-    Get.lazyPut<PermitController>(() => PermitController());
+    if (!Get.isRegistered<PermitController>()) {
+      Get.put<PermitController>(PermitController(), permanent: true);
+    }
   }
 }

@@ -20,12 +20,23 @@ class PermitListView extends GetView<PermitListController> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                AppStrings.permits,
-                style: AppTextStyles.title.copyWith(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      AppStrings.permits,
+                      style: AppTextStyles.title.copyWith(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: controller.onCreateNewPermitTap,
+                    icon: const Icon(Icons.add, color: AppColors.black),
+                    tooltip: 'Create New Permit',
+                  ),
+                ],
               ),
               const SizedBox(height: 18),
               Expanded(

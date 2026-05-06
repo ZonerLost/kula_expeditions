@@ -7,10 +7,7 @@ import '../modules/hiking_crossing/model/hiking_crossing_model.dart';
 class BorderCrossingCard extends StatelessWidget {
   final HikingCrossingModel crossing;
 
-  const BorderCrossingCard({
-    super.key,
-    required this.crossing,
-  });
+  const BorderCrossingCard({super.key, required this.crossing});
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +42,7 @@ class BorderCrossingCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "${crossing.fromCountry} → ${crossing.toCountry}",
+                  '${crossing.fromCountry} -> ${crossing.toCountry}',
                   style: AppTextStyles.body.copyWith(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -54,17 +51,17 @@ class BorderCrossingCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "Dates: 12 Feb - 31 March, 2026",
+                  'Dates: ${crossing.datesRange}',
                   style: AppTextStyles.small.copyWith(fontSize: 10),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  "Crossing Dates: ${crossing.crossingDate}",
+                  'Crossing Dates: ${crossing.crossingDate}',
                   style: AppTextStyles.small.copyWith(fontSize: 10),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  "Border Location: ${crossing.borderLocation}",
+                  'Border Location: ${crossing.borderLocation}',
                   style: AppTextStyles.small.copyWith(fontSize: 10),
                 ),
               ],

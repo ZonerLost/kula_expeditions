@@ -8,7 +8,12 @@ import '../../constants/bottom_nav_bar/map_nav_item_model.dart';
 import '../../modules/map/binding/map_screen_binding.dart';
 import '../../modules/map/view/map_screen_view.dart';
 import '../../modules/permit/binding/permit_binding.dart';
+import '../../modules/permit/controller/permit_controller.dart';
 import '../../modules/permit/view/permit_view.dart';
+import '../../modules/permit_list/binding/permit_list_binding.dart';
+import '../../modules/permit_list/view/permit_list_view.dart';
+import '../../modules/permit_payment/binding/permit_approved_binding.dart';
+import '../../modules/permit_payment/view/permit_approved_view.dart';
 import '../../modules/stages/binding/stages_binding.dart';
 import '../../modules/stages/view/stages_view.dart';
 import '../../modules/unlock_access/binding/unlock_binding.dart';
@@ -28,6 +33,8 @@ class _MainShellViewState extends State<MainShellView> {
     MapScreenBinding().dependencies();
     StagesBinding().dependencies();
     PermitBinding().dependencies();
+    PermitListBinding().dependencies();
+    PermitApprovedBinding().dependencies();
     UnlockBinding().dependencies();
   }
 
@@ -42,24 +49,31 @@ class _MainShellViewState extends State<MainShellView> {
     MapNavItemModel(label: AppStrings.navUnlock, icon: AppImages.lock),
   ];
 
-  final _screens = const [
-    MapScreenView(),
-    StagesView(),
-    PermitView(),
-    UnlockCodeView(),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final navController = Get.find<BottomNavController>();
+    final permitController = Get.find<PermitController>();
 
     return Scaffold(
-      body: Obx(
-        () => IndexedStack(
+      body: Obx(() {
+        final screens = <Widget>[
+          const MapScreenView(),
+          const StagesView(),
+          permitController.showPermitStatusScreen.value
+              ? const PermitApprovedView()
+              : (permitController.forceShowMainPermitScreen.value
+                    ? const PermitView()
+                    : (permitController.hasSavedPermitIds
+                          ? const PermitListView()
+                          : const PermitView())),
+          const UnlockCodeView(),
+        ];
+
+        return IndexedStack(
           index: navController.selectedIndex.value,
-          children: _screens,
-        ),
-      ),
+          children: screens,
+        );
+      }),
       bottomNavigationBar: CustomBottomNavBar(items: _navItems),
     );
   }

@@ -1,26 +1,49 @@
 import 'package:get/get.dart';
 
+import '../../../constants/bottom_nav_bar/bottom_nav_controller.dart';
 import '../../../routes/app_routes.dart';
+import '../../permit/controller/permit_controller.dart';
 import '../model/permit_payment_model.dart';
 
 class ConfirmPayController extends GetxController {
-  final permitData = PermitPaymentModel(
-    name: "Jamal Koliver",
-    passportNumber: "32422-44343423-3",
-    dates: "Aug 12 – Aug 18",
-    entry: "Albania",
-    exit: "Montenegro",
-    permitFee: "€30",
-    processingFee: "€31",
-    gstTax: "€3 (10%)",
-    total: "€33",
-    permitId: "BLK-8F23-9XJ2",
-    validity: "Aug 12 – Aug 18",
-    deliveryAddress: "Sky Avenue, Street 5, House 14, NYC",
-    isPaid: true,
-  );
+  final PermitController _permitController =
+      Get.isRegistered<PermitController>()
+      ? Get.find<PermitController>()
+      : Get.put(PermitController());
 
-  void onPaySecurelyTap() {
-    Get.toNamed(AppRoutes.permitApproved);
+  PermitPaymentModel get permitData {
+    final currentAmount =
+        num.tryParse(_permitController.amountController.text.trim()) ?? 0;
+    final amountText = 'EUR ${currentAmount.toStringAsFixed(0)}';
+    return PermitPaymentModel(
+      name: _permitController.fullNameController.text.trim(),
+      passportNumber: _permitController.passportController.text.trim(),
+      dates:
+          '${_permitController.startDateController.text.trim()} - ${_permitController.endDateController.text.trim()}',
+      entry: _permitController.fromController.text.trim(),
+      exit: _permitController.toController.text.trim(),
+      permitFee: amountText,
+      processingFee: 'EUR 0',
+      gstTax: 'EUR 0',
+      total: amountText,
+      permitId: _permitController.selectedPermit.value?.permitId ?? 'Pending',
+      validity:
+          '${_permitController.startDateController.text.trim()} - ${_permitController.endDateController.text.trim()}',
+      deliveryAddress: _permitController.borderPointController.text.trim(),
+      isPaid: false,
+    );
+  }
+
+  Future<void> onPaySecurelyTap() async {
+    final submitted = await _permitController.submitPermitRequest();
+    if (submitted == null) {
+      return;
+    }
+
+    _permitController.openPermitStatusScreen(permit: submitted);
+    if (Get.isRegistered<BottomNavController>()) {
+      Get.find<BottomNavController>().selectedIndex.value = 2;
+    }
+    Get.offAllNamed(AppRoutes.shell);
   }
 }

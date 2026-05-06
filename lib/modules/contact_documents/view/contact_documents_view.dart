@@ -9,7 +9,6 @@ import '../../../constants/app_textfield.dart';
 import '../../../widgets/upload_box_widget.dart';
 import '../controller/contact_documents_controller.dart';
 
-
 class ContactDocumentsView extends GetView<ContactDocumentsController> {
   const ContactDocumentsView({super.key});
 
@@ -22,7 +21,10 @@ class ContactDocumentsView extends GetView<ContactDocumentsController> {
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 20,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -41,8 +43,8 @@ class ContactDocumentsView extends GetView<ContactDocumentsController> {
                     ),
                     const SizedBox(height: 6),
                     _readOnlyField(
-                      text: controller.displayEmail,
-                      suffixText: '(default)',
+                      text: "Diablo@gmail.com",
+                      suffixText: "(default)",
                     ),
                     const SizedBox(height: 18),
 
@@ -58,7 +60,7 @@ class ContactDocumentsView extends GetView<ContactDocumentsController> {
                     ),
                     const SizedBox(height: 8),
                     Obx(
-                          () => UploadBoxWidget(
+                      () => UploadBoxWidget(
                         onTap: controller.uploadPassport,
                         fileName: controller.passportFileName.value,
                       ),
@@ -72,7 +74,7 @@ class ContactDocumentsView extends GetView<ContactDocumentsController> {
                     const SizedBox(height: 10),
 
                     Obx(
-                          () => Row(
+                      () => Row(
                         children: [
                           _radioOption(
                             title: AppStrings.yes,
@@ -98,21 +100,23 @@ class ContactDocumentsView extends GetView<ContactDocumentsController> {
                     const SizedBox(height: 12),
 
                     Obx(
-                          () => controller.needsVisa.value
+                      () => controller.needsVisa.value
                           ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            AppStrings.uploadVisaDocument,
-                            style: AppTextStyles.title.copyWith(fontSize: 14),
-                          ),
-                          const SizedBox(height: 8),
-                          UploadBoxWidget(
-                            onTap: controller.uploadVisaDocument,
-                            fileName: controller.visaFileName.value,
-                          ),
-                        ],
-                      )
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  AppStrings.uploadVisaDocument,
+                                  style: AppTextStyles.title.copyWith(
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                UploadBoxWidget(
+                                  onTap: controller.uploadVisaDocument,
+                                  fileName: controller.visaFileName.value,
+                                ),
+                              ],
+                            )
                           : const SizedBox.shrink(),
                     ),
 
@@ -153,28 +157,21 @@ class ContactDocumentsView extends GetView<ContactDocumentsController> {
               ),
             ),
 
-            Obx(() => Container(
+            Container(
               padding: const EdgeInsets.fromLTRB(18, 8, 18, 16),
               color: AppColors.scaffoldBg,
               child: AppButton(
-                text: controller.isLoading.value
-                    ? 'Submitting...'
-                    : AppStrings.continueText,
-                onTap: controller.isLoading.value
-                    ? () {}
-                    : controller.onContinueTap,
+                text: AppStrings.continueText,
+                onTap: controller.onContinueTap,
               ),
-            )),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _readOnlyField({
-    required String text,
-    String? suffixText,
-  }) {
+  Widget _readOnlyField({required String text, String? suffixText}) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
