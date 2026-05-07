@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -15,6 +16,7 @@ import '../../../features/permits/models/permit_model.dart' as permit_entity;
 import '../../../features/permits/models/permit_request_model.dart';
 import '../../../features/permits/services/permit_local_storage_service.dart';
 import '../../../features/permits/services/permit_remote_service.dart';
+import '../../../features/permits/services/permit_storage_service.dart';
 import '../../../constants/app_imges.dart';
 import '../../../constants/app_strings.dart';
 import '../../../routes/app_routes.dart';
@@ -24,9 +26,11 @@ class PermitController extends GetxController {
   PermitController({
     PermitRemoteService? remoteService,
     PermitLocalStorageService? localStorageService,
+    PermitStorageService? storageService,
   }) : _remoteService = remoteService ?? PermitRemoteService(),
        _localStorageService =
-           localStorageService ?? PermitLocalStorageService();
+           localStorageService ?? PermitLocalStorageService(),
+       _storageService = storageService ?? PermitStorageService();
 
   final permit = permit_ui.PermitModel(
     title: AppStrings.permitMainTitle,
@@ -38,6 +42,7 @@ class PermitController extends GetxController {
 
   final PermitRemoteService _remoteService;
   final PermitLocalStorageService _localStorageService;
+  final PermitStorageService _storageService;
 
   final isLoading = false.obs;
   final isSubmitting = false.obs;
@@ -83,6 +88,8 @@ class PermitController extends GetxController {
   final hasDiscount = false.obs;
   final passportFileName = ''.obs;
   final visaFileName = ''.obs;
+  PlatformFile? _passportFile;
+  PlatformFile? _visaFile;
 
   static const String permitVerifyBaseUrl =
       'https://yourdomain.com/verify-permit';
@@ -258,7 +265,39 @@ class PermitController extends GetxController {
       _showError('Amount must be numeric.');
       return false;
     }
+
+    if (_passportFile == null) {
+      _showError('Passport image is required.');
+      return false;
+    }
+    if (needsVisa.value && _visaFile == null) {
+      _showError('Visa image is required when visa is needed.');
+      return false;
+    }
     return true;
+  }
+
+  Future<void> pickPassportImage() async {
+    final selected = await _pickImageFile();
+    if (selected == null) {
+      return;
+    }
+    _passportFile = selected;
+    passportFileName.value = selected.name;
+  }
+
+  Future<void> pickVisaImage() async {
+    final selected = await _pickImageFile();
+    if (selected == null) {
+      return;
+    }
+    _visaFile = selected;
+    visaFileName.value = selected.name;
+  }
+
+  void clearVisaImage() {
+    _visaFile = null;
+    visaFileName.value = '';
   }
 
   PermitRequestModel buildPermitRequest() {
@@ -279,11 +318,7 @@ class PermitController extends GetxController {
       hasDiscount: hasDiscount.value,
       amountPaid: amount,
       paymentStatus: 'unpaid',
-      // TODO: Implement passport image upload later.
-      // For now, backend receives passportUrl as empty string.
       passportUrl: '',
-      // TODO: Implement visa document upload later.
-      // For now, backend receives visaUrl as empty string.
       visaUrl: '',
       userId: demoUserId,
       status: 'pending',
@@ -305,6 +340,13 @@ class PermitController extends GetxController {
       final createdPermit = await _remoteService.createPermitRequest(request);
       debugPrint(
         '[Permit][Submit] Firestore write succeeded. permitId=${createdPermit.permitId}',
+      );
+      final uploadedUrls = await _uploadAndPersistDocumentUrls(
+        permitId: createdPermit.permitId,
+      );
+      final permitWithUrls = createdPermit.copyWith(
+        passportUrl: uploadedUrls.$1,
+        visaUrl: uploadedUrls.$2,
       );
 
       var savedLocally = true;
@@ -344,13 +386,13 @@ class PermitController extends GetxController {
       }
 
       selectedPermit.value =
-          _findPermit(createdPermit.permitId) ?? createdPermit;
+          _findPermit(permitWithUrls.permitId) ?? permitWithUrls;
       if (savedLocally) {
         Get.snackbar('Success', 'Permit request submitted successfully.');
       } else {
         Get.snackbar(
           'Submitted',
-          'Permit submitted, but local save failed. Permit ID: ${createdPermit.permitId}',
+          'Permit submitted, but local save failed. Permit ID: ${permitWithUrls.permitId}',
           snackPosition: SnackPosition.BOTTOM,
           duration: const Duration(seconds: 5),
         );
@@ -491,6 +533,59 @@ class PermitController extends GetxController {
       }
     }
     return null;
+  }
+
+  Future<(String, String)> _uploadAndPersistDocumentUrls({
+    required String permitId,
+  }) async {
+    if (_passportFile == null) {
+      throw StateError('Passport image is missing.');
+    }
+    if (needsVisa.value && _visaFile == null) {
+      throw StateError('Visa image is missing.');
+    }
+
+    final passportUrl = await _storageService.uploadDocument(
+      file: _passportFile!,
+      permitId: permitId,
+      type: PermitDocumentType.passport,
+    );
+
+    String visaUrl = '';
+    if (needsVisa.value) {
+      visaUrl = await _storageService.uploadDocument(
+        file: _visaFile!,
+        permitId: permitId,
+        type: PermitDocumentType.visa,
+      );
+    }
+
+    await _remoteService.updatePermitDocumentUrls(
+      permitId: permitId,
+      passportUrl: passportUrl,
+      visaUrl: needsVisa.value ? visaUrl : '',
+    );
+    return (passportUrl, visaUrl);
+  }
+
+  Future<PlatformFile?> _pickImageFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowMultiple: false,
+      withData: true,
+      allowedExtensions: const <String>['jpg', 'jpeg', 'png', 'webp', 'heic'],
+    );
+    if (result == null || result.files.isEmpty) {
+      return null;
+    }
+
+    final file = result.files.first;
+    if (file.bytes == null || file.bytes!.isEmpty) {
+      throw StateError(
+        'Could not read selected file. Please pick a smaller image and try again.',
+      );
+    }
+    return file;
   }
 
   DateTime? _parseInputDate(String value) {

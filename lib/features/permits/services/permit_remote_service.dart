@@ -28,8 +28,8 @@ class PermitRemoteService {
       'status': 'pending',
       'paymentStatus': 'unpaid',
       'amountPaid': request.amountPaid,
-      'passportUrl': '',
-      'visaUrl': '',
+      'passportUrl': request.passportUrl,
+      'visaUrl': request.visaUrl,
       'createdAt': now,
       'submittedAt': now,
       'updatedAt': now,
@@ -74,7 +74,7 @@ class PermitRemoteService {
       nationality: request.nationality,
       needsVisa: request.needsVisa,
       passportNumber: request.passportNumber,
-      passportUrl: '',
+      passportUrl: request.passportUrl,
       paymentStatus: 'unpaid',
       permitId: permitId,
       startDate: request.startDate,
@@ -83,8 +83,42 @@ class PermitRemoteService {
       toCountry: request.toCountry,
       updatedAt: localNow,
       userId: request.userId,
-      visaUrl: '',
+      visaUrl: request.visaUrl,
     );
+  }
+
+  Future<void> updatePermitDocumentUrls({
+    required String permitId,
+    String? passportUrl,
+    String? visaUrl,
+  }) async {
+    final cleanPermitId = permitId.trim();
+    if (cleanPermitId.isEmpty) {
+      throw ArgumentError.value(permitId, 'permitId', 'must not be empty');
+    }
+
+    final patch = <String, dynamic>{'updatedAt': FieldValue.serverTimestamp()};
+    if (passportUrl != null) {
+      patch['passportUrl'] = passportUrl;
+    }
+    if (visaUrl != null) {
+      patch['visaUrl'] = visaUrl;
+    }
+    if (patch.length == 1) {
+      return;
+    }
+
+    final query = await _firestore
+        .collection(_collectionName)
+        .where('permitId', isEqualTo: cleanPermitId)
+        .limit(1)
+        .get();
+
+    if (query.docs.isEmpty) {
+      throw StateError('Permit not found for permitId="$cleanPermitId".');
+    }
+
+    await query.docs.first.reference.update(patch);
   }
 
   Future<List<PermitModel>> getPermitsByIds(List<String> permitIds) async {

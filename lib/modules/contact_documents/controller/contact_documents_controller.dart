@@ -20,18 +20,31 @@ class ContactDocumentsController extends GetxController {
 
   void selectVisaOption(bool value) {
     needsVisa.value = value;
+    if (!value) {
+      _permitController.clearVisaImage();
+    }
   }
 
-  void uploadPassport() {
-    // TODO: Implement passport image upload later.
-    // For now, backend receives passportUrl as empty string.
-    Get.snackbar('Info', 'Passport upload will be implemented later.');
+  Future<void> uploadPassport() async {
+    try {
+      await _permitController.pickPassportImage();
+    } catch (error) {
+      final message = error is StateError
+          ? error.message.toString()
+          : 'Unable to pick passport image.';
+      Get.snackbar('Upload failed', message);
+    }
   }
 
-  void uploadVisaDocument() {
-    // TODO: Implement visa document upload later.
-    // For now, backend receives visaUrl as empty string.
-    Get.snackbar('Info', 'Visa upload will be implemented later.');
+  Future<void> uploadVisaDocument() async {
+    try {
+      await _permitController.pickVisaImage();
+    } catch (error) {
+      final message = error is StateError
+          ? error.message.toString()
+          : 'Unable to pick visa image.';
+      Get.snackbar('Upload failed', message);
+    }
   }
 
   void onContinueTap() {
