@@ -26,17 +26,16 @@ class OnboardingScreen extends GetView<OnboardingController> {
         child: SafeArea(
           bottom: false,
           child: Obx(() {
-            final page = controller.pages[controller.currentIndex.value];
-
+            // Read both currentIndex and isPaused to trigger rebuild
+            final index = controller.currentIndex.value;
+            controller.isPaused.value; // Force rebuild when isPaused changes
+            final page = controller.pages[index];
             return Column(
               children: [
                 const Spacer(),
                 OnboardingCard(
                   model: page,
-                  onPrimaryTap: controller.primaryAction,
-                  onSecondaryTap: page.secondaryButtonText != null
-                      ? controller.secondaryAction
-                      : null,
+                  onPrimaryTap: () => controller.primaryAction(),
                 ),
               ],
             );

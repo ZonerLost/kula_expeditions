@@ -19,7 +19,7 @@ import '../modules/permit_personal_info/binding/permit_personal_info_binding.dar
 import '../modules/permit_personal_info/view/permit_personal_info_view.dart';
 import '../modules/splash/bindings/splash_binding.dart';
 import '../modules/splash/view/splash_screen.dart';
-import '../modules/stage_detail/binding/stage_detail_binding.dart';
+import '../modules/stages/view/binding/stage_detail_binding.dart';
 import '../modules/stage_detail/view/stage_detail_view.dart';
 import '../modules/stages/binding/stages_binding.dart';
 import '../modules/stages/view/stages_view.dart';
@@ -41,10 +41,7 @@ class AppPages {
       page: () => const OnboardingScreen(),
       binding: OnboardingBinding(),
     ),
-    GetPage(
-      name: AppRoutes.shell,
-      page: () => const MainShellView(),
-    ),
+    GetPage(name: AppRoutes.shell, page: () => const MainShellView()),
     GetPage(
       name: AppRoutes.mapScreen,
       page: () => const MapScreenView(),

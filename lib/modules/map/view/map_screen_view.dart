@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import '../../../constants/app_colors.dart';
-import '../../../constants/app_imges.dart';
 import '../../../constants/map_filter_chips.dart';
 import '../../../constants/map_floating_buttons.dart';
 import '../../../constants/map_marker_card.dart';
 import '../../../constants/map_search_bar.dart';
 import '../../../constants/selected_checkpoint_card.dart';
+import '../../../modules/onboarding/model/map_package_model.dart';
 import '../../../widgets/locked_trail_card.dart';
 import '../../../widgets/camp_detail_card.dart';
 import '../../../widgets/stage_guide_card.dart';
@@ -24,11 +25,15 @@ class MapScreenView extends GetView<MapScreenController> {
         child: Stack(
           children: [
             Positioned.fill(
-              child: GestureDetector(
-                onTap: controller.onMapTap,
-                child: Image.asset(
-                  AppImages.onboardingMap,
-                  fit: BoxFit.cover,
+              child: MapWidget(
+                key: const ValueKey('mapbox_map'),
+                onMapCreated: controller.onMapCreated,
+                styleUri: MapPackageModel.styleUrl,
+                viewport: CameraViewportState(
+                  center: Point(
+                    coordinates: Position(19.9, 42.7),
+                  ),
+                  zoom: 8.0,
                 ),
               ),
             ),
@@ -41,14 +46,14 @@ class MapScreenView extends GetView<MapScreenController> {
               ),
             ),
             Obx(
-                  () => MapFilterChips(
+              () => MapFilterChips(
                 chips: controller.chips,
                 selectedIndex: controller.selectedChipIndex.value,
                 onChipTap: controller.changeChipIndex,
               ),
             ),
             ...controller.markers.map(
-                  (marker) => MapMarkerCard(
+              (marker) => MapMarkerCard(
                 marker: marker,
                 onTap: () => controller.onMarkerTap(marker),
               ),
@@ -63,20 +68,20 @@ class MapScreenView extends GetView<MapScreenController> {
                   return controller.lockedMarker.value == null
                       ? const SizedBox.shrink()
                       : LockedTrailCard(
-                    marker: controller.lockedMarker.value!,
-                    onClose: controller.onCloseLockedMarker,
-                    onContinue: controller.onContinueMainTrail,
-                    onUnlock: controller.onUnlockFullAccess,
-                  );
+                          marker: controller.lockedMarker.value!,
+                          onClose: controller.onCloseLockedMarker,
+                          onContinue: controller.onContinueMainTrail,
+                          onUnlock: controller.onUnlockFullAccess,
+                        );
 
                 case MapBottomCardType.campDetail:
                   return controller.selectedMarker.value == null
                       ? const SizedBox.shrink()
                       : CampDetailCard(
-                    marker: controller.selectedMarker.value!,
-                    onClose: controller.onCloseCampDetail,
-                    onViewStageGuide: controller.onViewStageGuide,
-                  );
+                          marker: controller.selectedMarker.value!,
+                          onClose: controller.onCloseCampDetail,
+                          onViewStageGuide: controller.onViewStageGuide,
+                        );
 
                 case MapBottomCardType.stageGuide:
                   return StageGuideCard(
@@ -87,9 +92,9 @@ class MapScreenView extends GetView<MapScreenController> {
                   return controller.selectedMarker.value == null
                       ? const SizedBox.shrink()
                       : SelectedCheckpointCard(
-                    marker: controller.selectedMarker.value!,
-                    onClose: controller.onCloseSelectedCheckpoint,
-                  );
+                          marker: controller.selectedMarker.value!,
+                          onClose: controller.onCloseSelectedCheckpoint,
+                        );
 
                 case MapBottomCardType.none:
                   return const SizedBox.shrink();

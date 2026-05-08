@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../../constants/app_colors.dart';
-import '../../../constants/app_text_styles.dart';
+import 'package:get/get.dart';
+import '../constants/app_colors.dart';
+import '../constants/app_text_styles.dart';
 import '../constants/app_button.dart';
 import '../constants/app_imges.dart';
+import '../modules/onboarding/controller/onboarding_controller.dart';
 import '../modules/onboarding/model/onboarding_model.dart';
 
 class OnboardingCard extends StatelessWidget {
@@ -20,6 +22,7 @@ class OnboardingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
+    final onboardingController = Get.find<OnboardingController>();
 
     return Align(
       alignment: Alignment.bottomCenter,
@@ -58,37 +61,40 @@ class OnboardingCard extends StatelessWidget {
             const SizedBox(height: 16),
 
             if (model.showProgress) ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: AppColors.progressBg,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: FractionallySizedBox(
-                        alignment: Alignment.centerLeft,
-                        widthFactor: model.progress,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: AppColors.buttonGreen,
-                            borderRadius: BorderRadius.circular(20),
+              Obx(() {
+                final p = onboardingController.progress.value;
+                return Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: AppColors.progressBg,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: FractionallySizedBox(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: p,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: AppColors.buttonGreen,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${(model.progress * 100).toInt()}%',
-                    style: AppTextStyles.small.copyWith(
-                      fontSize: 10,
-                      color: const Color(0xFF5D6470),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${(p * 100).toInt()}%',
+                      style: AppTextStyles.small.copyWith(
+                        fontSize: 10,
+                        color: const Color(0xFF5D6470),
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                );
+              }),
               const SizedBox(height: 14),
             ],
 
@@ -135,14 +141,19 @@ class OnboardingCard extends StatelessWidget {
 
             if (model.secondaryButtonText != null) const SizedBox(height: 10),
 
-            SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: AppButton(
-                text: model.buttonText,
-                onTap: onPrimaryTap,
-              ),
-            ),
+            Obx(() {
+              final loading = onboardingController.isLoadingPackage.value;
+              return SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : AppButton(
+                        text: model.buttonText,
+                        onTap: onPrimaryTap,
+                      ),
+              );
+            }),
 
             if (model.showFooterText) ...[
               const SizedBox(height: 8),

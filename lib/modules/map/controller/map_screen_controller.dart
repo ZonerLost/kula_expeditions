@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import '../../../constants/app_imges.dart';
 import '../../../constants/app_strings.dart';
 import '../model/map_marker_model.dart';
@@ -16,6 +17,8 @@ class MapScreenController extends GetxController {
   final selectedMarker = Rxn<MapMarkerModel>();
   final lockedMarker = Rxn<MapMarkerModel>();
   final currentCard = MapBottomCardType.selectedCheckpoint.obs;
+
+  MapboxMap? mapboxMap;
 
   final chips = <String>[
     AppStrings.chipCamps,
@@ -116,9 +119,11 @@ class MapScreenController extends GetxController {
     currentCard.value = MapBottomCardType.selectedCheckpoint;
   }
 
-  void changeChipIndex(int index) {
-    selectedChipIndex.value = index;
+  void onMapCreated(MapboxMap map) {
+    mapboxMap = map;
   }
+
+  void changeChipIndex(int index) => selectedChipIndex.value = index;
 
   void onMarkerTap(MapMarkerModel marker) {
     if (marker.isLocked) {
@@ -127,7 +132,6 @@ class MapScreenController extends GetxController {
       currentCard.value = MapBottomCardType.lockedTrail;
       return;
     }
-
     lockedMarker.value = null;
     selectedMarker.value = marker;
     currentCard.value = MapBottomCardType.selectedCheckpoint;
@@ -154,23 +158,14 @@ class MapScreenController extends GetxController {
     currentCard.value = MapBottomCardType.campDetail;
   }
 
-  void onViewStageGuide() {
-    currentCard.value = MapBottomCardType.stageGuide;
-  }
+  void onViewStageGuide() => currentCard.value = MapBottomCardType.stageGuide;
 
-  void onCloseCampDetail() {
-    currentCard.value = MapBottomCardType.none;
-  }
+  void onCloseCampDetail() => currentCard.value = MapBottomCardType.none;
 
-  void onCloseStageGuide() {
-    currentCard.value = MapBottomCardType.none;
-  }
+  void onCloseStageGuide() => currentCard.value = MapBottomCardType.none;
 
   void onMapTap() {}
-
   void onSearchTap() {}
-
   void onLocationTap() {}
-
   void onDirectionTap() {}
 }

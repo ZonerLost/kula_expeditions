@@ -11,11 +11,11 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   Get.put(BottomNavController(), permanent: true);
-  runApp(const kuala_exp());
+  runApp(const KulaApp());
 }
 
-class kuala_exp extends StatelessWidget {
-  const kuala_exp({super.key});
+class KulaApp extends StatelessWidget {
+  const KulaApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +25,7 @@ class kuala_exp extends StatelessWidget {
       initialRoute: AppRoutes.splash,
       getPages: AppPages.pages,
       theme: ThemeData(
-        fontFamily: "ZalandoSans",
+        fontFamily: 'ZalandoSans',
         scaffoldBackgroundColor: Colors.white,
         useMaterial3: true,
       ),

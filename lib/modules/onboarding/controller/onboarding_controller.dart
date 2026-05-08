@@ -1,55 +1,101 @@
 import 'package:get/get.dart';
 import '../../../constants/app_strings.dart';
 import '../model/onboarding_model.dart';
+import '../model/map_package_model.dart';
+import '../services/map_package_service.dart';
 
 class OnboardingController extends GetxController {
   final currentIndex = 0.obs;
+  final progress = 0.0.obs;
+  final isLoadingPackage = false.obs;
+  final isPaused = false.obs;
 
-  final pages = <OnboardingModel>[
-    OnboardingModel(
-      title: AppStrings.offlineTitle,
-      description: AppStrings.offlineDescription,
-      buttonText: AppStrings.downloadOfflineMap,
-      secondaryButtonText: AppStrings.alreadyDownloaded,
-    ),
-    OnboardingModel(
-      title: AppStrings.downloadingOfflineMapTitle,
-      description: AppStrings.offlineDescription,
-      buttonText: AppStrings.pauseDownload,
-      showProgress: true,
-      progress: 0.45,
-      showFooterText: true,
-    ),
-    OnboardingModel(
-      title: AppStrings.mapReadyTitle,
-      description: AppStrings.mapReadyDescription,
-      buttonText: AppStrings.openMap,
-      showOpenMapButton: true,
-    ),
-  ];
+  bool _downloadComplete = false;
+  MapPackageModel? _currentPackage;
+  bool _downloadCancelled = false;
 
-  void nextPage() {
-    if (currentIndex.value < pages.length - 1) {
-      currentIndex.value++;
-    }
-  }
+  List<OnboardingModel> get pages => [
+        OnboardingModel(
+          title: AppStrings.offlineTitle,
+          description: AppStrings.offlineDescription,
+          buttonText: AppStrings.downloadOfflineMap,
+        ),
+        OnboardingModel(
+          title: AppStrings.downloadingOfflineMapTitle,
+          description: AppStrings.offlineDescription,
+          buttonText: isPaused.value
+              ? AppStrings.resumeDownload
+              : AppStrings.pauseDownload,
+          showProgress: true,
+          showFooterText: true,
+        ),
+        OnboardingModel(
+          title: AppStrings.mapReadyTitle,
+          description: AppStrings.mapReadyDescription,
+          buttonText: AppStrings.openMap,
+          showOpenMapButton: true,
+        ),
+      ];
 
-  void previousPage() {
-    if (currentIndex.value > 0) {
-      currentIndex.value--;
-    }
-  }
-
-  void primaryAction() {
+  Future<void> primaryAction() async {
     if (currentIndex.value == 0) {
+      isLoadingPackage.value = true;
+      final package = await MapPackageService.fetchPackage();
+      isLoadingPackage.value = false;
+      if (package == null || !package.isActive) return;
+      _currentPackage = package;
+      progress.value = 0.0;
       currentIndex.value = 1;
+      _startDownload();
     } else if (currentIndex.value == 1) {
-      currentIndex.value = 2;
-    } else {
+      if (isPaused.value) {
+        _resumeDownload();
+      } else {
+        _pauseDownload();
+      }
+    } else if (currentIndex.value == 2 && _downloadComplete) {
       Get.offAllNamed('/shell');
     }
   }
-  void secondaryAction() {
-    currentIndex.value = 2;
+
+  void _startDownload() {
+    if (_currentPackage == null) return;
+    _downloadCancelled = false;
+    isPaused.value = false;
+    _runDownload();
+  }
+
+  void _pauseDownload() {
+    _downloadCancelled = true;
+    isPaused.value = true;
+  }
+
+  void _resumeDownload() {
+    isPaused.value = false;
+    _runDownload();
+  }
+
+  void _runDownload() {
+    if (_currentPackage == null) return;
+    _downloadCancelled = false;
+
+    MapPackageService.downloadPackage(
+      _currentPackage!,
+      onProgress: (p) {
+        if (!_downloadCancelled) {
+          progress.value = p;
+        }
+      },
+    ).then((_) {
+      if (!_downloadCancelled) {
+        _downloadComplete = true;
+        currentIndex.value = 2;
+      }
+    }).catchError((e) {
+      if (!_downloadCancelled) {
+        currentIndex.value = 0;
+        progress.value = 0.0;
+      }
+    });
   }
 }

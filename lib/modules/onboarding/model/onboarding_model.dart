@@ -4,7 +4,6 @@ class OnboardingModel {
   final String buttonText;
   final String? secondaryButtonText;
   final bool showProgress;
-  final double progress;
   final bool showFooterText;
   final bool showOpenMapButton;
 
@@ -14,7 +13,6 @@ class OnboardingModel {
     required this.buttonText,
     this.secondaryButtonText,
     this.showProgress = false,
-    this.progress = 0.0,
     this.showFooterText = false,
     this.showOpenMapButton = false,
   });

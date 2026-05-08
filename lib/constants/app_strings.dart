@@ -10,6 +10,7 @@ class AppStrings {
   static const String downloadingOfflineMapTitle =
       "Downloading offline map...";
   static const String pauseDownload = "Pause download";
+  static const String resumeDownload = "Resume download";
   static const String mapReadyTitle = "Map ready for offline use";
   static const String mapReadyDescription =
       "You’re all set. Explore the trail anytime — even in airplane mode.";

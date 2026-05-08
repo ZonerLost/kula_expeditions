@@ -1,7 +1,7 @@
 // lib/modules/stage_detail/binding/stage_detail_binding.dart
 
 import 'package:get/get.dart';
-import '../controller/stage_detail_controller.dart';
+import '../../../stage_detail/controller/stage_detail_controller.dart';
 
 class StageDetailBinding extends Bindings {
   @override
