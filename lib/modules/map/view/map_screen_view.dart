@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import '../../../constants/app_colors.dart';
-import '../../../constants/map_filter_chips.dart';
 import '../../../constants/map_floating_buttons.dart';
 import '../../../constants/map_search_bar.dart';
 import '../../../constants/selected_checkpoint_card.dart';
@@ -54,41 +53,62 @@ class MapScreenView extends GetView<MapScreenController> {
                     const SizedBox(height: 8),
                     SizedBox(
                       height: MediaQuery.of(context).size.height * 0.04,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: controller.chips.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 8),
-                        itemBuilder: (context, index) {
-                          final isSelected = controller.selectedChipIndex.value == index;
-                          return GestureDetector(
-                            onTap: () => controller.changeChipIndex(index),
-                            child: Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: MediaQuery.of(context).size.width * 0.035,
-                                vertical: MediaQuery.of(context).size.height * 0.008,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.chipBg,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? AppColors.navSelected
-                                      : AppColors.chipBorder,
+                      child: Obx(
+                        () => SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: List.generate(controller.chips.length, (
+                              index,
+                            ) {
+                              final isSelected =
+                                  controller.selectedChipIndex.value == index;
+                              return Padding(
+                                padding: EdgeInsets.only(
+                                  right: index < controller.chips.length - 1
+                                      ? 8
+                                      : 0,
                                 ),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  controller.chips[index],
-                                  style: TextStyle(
-                                    fontSize: MediaQuery.of(context).size.width * 0.03,
-                                    fontWeight: FontWeight.w500,
-                                    color: AppColors.black,
+                                child: GestureDetector(
+                                  onTap: () =>
+                                      controller.changeChipIndex(index),
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal:
+                                          MediaQuery.of(context).size.width *
+                                          0.035,
+                                      vertical:
+                                          MediaQuery.of(context).size.height *
+                                          0.008,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? AppColors.black
+                                          : AppColors.chipBg,
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                        color: isSelected
+                                            ? AppColors.black
+                                            : AppColors.chipBorder,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      controller.chips[index],
+                                      style: TextStyle(
+                                        fontSize:
+                                            MediaQuery.of(context).size.width *
+                                            0.03,
+                                        fontWeight: FontWeight.w500,
+                                        color: isSelected
+                                            ? AppColors.white
+                                            : AppColors.black,
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
-                          );
-                        },
+                              );
+                            }),
+                          ),
+                        ),
                       ),
                     ),
                   ],

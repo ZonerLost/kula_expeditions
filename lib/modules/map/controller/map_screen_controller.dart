@@ -64,12 +64,20 @@ class MapScreenController extends GetxController {
   void _listenPoiCategories() {
     _categoriesSub = _firestore.collection('poi_categories').snapshots().listen(
       (snapshot) {
-        debugPrint('Loaded ${snapshot.docs.length} POI categories from Firestore');
-        final activeCategories = snapshot.docs
-            .map((doc) => PoiCategoryModel.fromFirestore(doc.data(), doc.id))
-            .where((c) => c.status.trim().toLowerCase() == 'active')
-            .toList()
-          ..sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
+        debugPrint(
+          'Loaded ${snapshot.docs.length} POI categories from Firestore',
+        );
+        final activeCategories =
+            snapshot.docs
+                .map(
+                  (doc) => PoiCategoryModel.fromFirestore(doc.data(), doc.id),
+                )
+                .where((c) => c.status.trim().toLowerCase() == 'active')
+                .toList()
+              ..sort(
+                (a, b) =>
+                    a.label.toLowerCase().compareTo(b.label.toLowerCase()),
+              );
 
         debugPrint('Active POI categories: ${activeCategories.length}');
         categories.assignAll(activeCategories);
@@ -86,28 +94,35 @@ class MapScreenController extends GetxController {
   }
 
   void _listenPois() {
-    _poisSub = _firestore.collection('pois').snapshots().listen(
-      (snapshot) {
-        debugPrint('Loaded ${snapshot.docs.length} POIs from Firestore');
-        final activePois = snapshot.docs
-            .map((doc) => PoiModel.fromFirestore(doc.data(), doc.id))
-            .where((p) => p.status.trim().toLowerCase() == 'active')
-            .where((p) => p.latitude != 0 && p.longitude != 0)
-            .toList()
-          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    _poisSub = _firestore
+        .collection('pois')
+        .snapshots()
+        .listen(
+          (snapshot) {
+            debugPrint('Loaded ${snapshot.docs.length} POIs from Firestore');
+            final activePois =
+                snapshot.docs
+                    .map((doc) => PoiModel.fromFirestore(doc.data(), doc.id))
+                    .where((p) => p.status.trim().toLowerCase() == 'active')
+                    .where((p) => p.latitude != 0 && p.longitude != 0)
+                    .toList()
+                  ..sort(
+                    (a, b) =>
+                        a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+                  );
 
-        debugPrint('Active POIs with coordinates: ${activePois.length}');
-        _allPois
-          ..clear()
-          ..addAll(activePois);
-        _applyFiltersAndRefreshMarkers();
-        isLoading.value = false;
-      },
-      onError: (e) {
-        debugPrint('Error loading POIs: $e');
-        isLoading.value = false;
-      },
-    );
+            debugPrint('Active POIs with coordinates: ${activePois.length}');
+            _allPois
+              ..clear()
+              ..addAll(activePois);
+            _applyFiltersAndRefreshMarkers();
+            isLoading.value = false;
+          },
+          onError: (e) {
+            debugPrint('Error loading POIs: $e');
+            isLoading.value = false;
+          },
+        );
   }
 
   String? get _selectedCategoryId {
@@ -126,7 +141,9 @@ class MapScreenController extends GetxController {
           selectedCategoryId == null || poi.categoryId == selectedCategoryId;
       if (!matchesCategory) return false;
       if (query.isEmpty) return true;
-      final categoryLabel = _findCategoryById(poi.categoryId)?.label.toLowerCase();
+      final categoryLabel = _findCategoryById(
+        poi.categoryId,
+      )?.label.toLowerCase();
       return poi.name.toLowerCase().contains(query) ||
           poi.description.toLowerCase().contains(query) ||
           (categoryLabel?.contains(query) ?? false);
@@ -181,7 +198,9 @@ class MapScreenController extends GetxController {
       markerList.map((marker) async {
         final iconBytes = await _buildMarkerIcon(marker.title, marker.subtitle);
         return PointAnnotationOptions(
-          geometry: Point(coordinates: Position(marker.longitude, marker.latitude)),
+          geometry: Point(
+            coordinates: Position(marker.longitude, marker.latitude),
+          ),
           image: iconBytes,
           iconSize: iconSize,
           iconAnchor: IconAnchor.BOTTOM,
@@ -191,7 +210,9 @@ class MapScreenController extends GetxController {
 
     final created = await manager.createMulti(options);
     _annotations.addAll(created.whereType<PointAnnotation>());
-    debugPrint('Created ${_annotations.length} map annotations at iconSize=$iconSize');
+    debugPrint(
+      'Created ${_annotations.length} map annotations at iconSize=$iconSize',
+    );
   }
 
   double _iconSizeForZoom(double zoom) {
@@ -219,7 +240,8 @@ class MapScreenController extends GetxController {
     const r = 6371.0;
     final dLat = (lat2 - lat1) * math.pi / 180;
     final dLon = (lon2 - lon1) * math.pi / 180;
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+    final a =
+        math.sin(dLat / 2) * math.sin(dLat / 2) +
         math.cos(lat1 * math.pi / 180) *
             math.cos(lat2 * math.pi / 180) *
             math.sin(dLon / 2) *
@@ -229,20 +251,28 @@ class MapScreenController extends GetxController {
   }
 
   String _formatDistance(double poiLat, double poiLng) {
-    final camLat = _cameraLat ??
-        MapPackageModel.minLat + (MapPackageModel.maxLat - MapPackageModel.minLat) / 2;
-    final camLng = _cameraLng ??
-        MapPackageModel.minLng + (MapPackageModel.maxLng - MapPackageModel.minLng) / 2;
+    final camLat =
+        _cameraLat ??
+        MapPackageModel.minLat +
+            (MapPackageModel.maxLat - MapPackageModel.minLat) / 2;
+    final camLng =
+        _cameraLng ??
+        MapPackageModel.minLng +
+            (MapPackageModel.maxLng - MapPackageModel.minLng) / 2;
     final km = _haversineKm(camLat, camLng, poiLat, poiLng);
     if (km < 1) return '${(km * 1000).round()} m';
     return '${km.toStringAsFixed(1)} km';
   }
 
   String _formatTime(double poiLat, double poiLng) {
-    final camLat = _cameraLat ??
-        MapPackageModel.minLat + (MapPackageModel.maxLat - MapPackageModel.minLat) / 2;
-    final camLng = _cameraLng ??
-        MapPackageModel.minLng + (MapPackageModel.maxLng - MapPackageModel.minLng) / 2;
+    final camLat =
+        _cameraLat ??
+        MapPackageModel.minLat +
+            (MapPackageModel.maxLat - MapPackageModel.minLat) / 2;
+    final camLng =
+        _cameraLng ??
+        MapPackageModel.minLng +
+            (MapPackageModel.maxLng - MapPackageModel.minLng) / 2;
     final km = _haversineKm(camLat, camLng, poiLat, poiLng);
     final minutes = (km / 5.0 * 60).round();
     if (minutes < 60) return '$minutes min';
@@ -266,7 +296,10 @@ class MapScreenController extends GetxController {
 
     // Shadow
     canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(4, 4, w - 8, h), const Radius.circular(r)),
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(4, 4, w - 8, h),
+        const Radius.circular(r),
+      ),
       Paint()
         ..color = const Color(0x40000000)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
@@ -274,7 +307,10 @@ class MapScreenController extends GetxController {
 
     // White pill
     canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, w, h), const Radius.circular(r)),
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, 0, w, h),
+        const Radius.circular(r),
+      ),
       Paint()..color = const Color(0xFFFFFFFF),
     );
 
@@ -321,7 +357,10 @@ class MapScreenController extends GetxController {
       maxLines: 1,
       ellipsis: '…',
     )..layout(maxWidth: w - avatarCx * 2 - 20);
-    titlePainter.paint(canvas, Offset(avatarCx * 2 + 8, avatarCy - titlePainter.height - 3));
+    titlePainter.paint(
+      canvas,
+      Offset(avatarCx * 2 + 8, avatarCy - titlePainter.height - 3),
+    );
 
     // Subtitle
     if (subtitle.isNotEmpty) {
@@ -385,13 +424,18 @@ class MapScreenController extends GetxController {
     if ((zoom - _currentZoom).abs() < 0.2) return;
     _currentZoom = zoom;
     _zoomDebounce?.cancel();
-    _zoomDebounce = Timer(const Duration(milliseconds: 150), _updateAnnotationSizes);
+    _zoomDebounce = Timer(
+      const Duration(milliseconds: 150),
+      _updateAnnotationSizes,
+    );
   }
 
   Future<void> onMapIdle() async {}
 
   void changeChipIndex(int index) {
-    debugPrint('Chip selected: index=$index, chip=${chips.length > index ? chips[index] : "invalid"}');
+    debugPrint(
+      'Chip selected: index=$index, chip=${chips.length > index ? chips[index] : "invalid"}',
+    );
     selectedChipIndex.value = index;
     _applyFiltersAndRefreshMarkers();
   }
