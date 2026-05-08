@@ -25,12 +25,15 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _navigate() async {
+    debugPrint('[Splash] Checking map download status...');
     final package = await MapPackageService.fetchPackage();
     if (package != null &&
         package.isActive &&
         await MapPackageService.isDownloaded(package.version)) {
+      debugPrint('[Splash] Map is downloaded. Navigating to shell...');
       Get.offNamed(AppRoutes.shell);
     } else {
+      debugPrint('[Splash] Map not downloaded. Navigating to onboarding...');
       Get.offNamed(AppRoutes.onboarding);
     }
   }

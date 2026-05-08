@@ -8,6 +8,8 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+import java.util.Properties
+
 android {
     namespace = "com.example.kuala_exp"
     compileSdk = flutter.compileSdkVersion
@@ -32,12 +34,14 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        val properties = org.jetbrains.kotlin.konan.properties.Properties()
         val envFile = rootProject.file("../../.env")
         if (envFile.exists()) {
+            val properties = Properties()
             envFile.inputStream().use { properties.load(it) }
+            manifestPlaceholders["MAPBOX_ACCESS_TOKEN"] = properties.getProperty("MAPBOX_ACCESS_TOKEN", "")
+        } else {
+            manifestPlaceholders["MAPBOX_ACCESS_TOKEN"] = ""
         }
-        manifestPlaceholders["MAPBOX_ACCESS_TOKEN"] = properties.getProperty("MAPBOX_ACCESS_TOKEN", "")
     }
 
     buildTypes {

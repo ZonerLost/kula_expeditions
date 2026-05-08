@@ -29,9 +29,7 @@ class SelectedCheckpointCard extends StatelessWidget {
         ),
         decoration: const BoxDecoration(
           color: AppColors.white,
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(22),
-          ),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
           boxShadow: [
             BoxShadow(
               color: Color(0x18000000),
@@ -71,16 +69,16 @@ class SelectedCheckpointCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: AppColors.lightBorder,
-                ),
+                border: Border.all(color: AppColors.lightBorder),
               ),
               child: Row(
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(10),
-                    child: Image.asset(
-                      marker.checkpointImage ?? marker.imagePath,
+                    child: Image(
+                      image: marker.imageUrl.isNotEmpty
+                          ? NetworkImage(marker.imageUrl)
+                          : AssetImage(marker.checkpointImage),
                       width: context.screenWidth * 0.13,
                       height: context.screenWidth * 0.13,
                       fit: BoxFit.cover,
@@ -102,7 +100,7 @@ class SelectedCheckpointCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          "Distance: ${marker.distance ?? '--'}",
+                          "Distance: ${marker.distance}",
                           style: AppTextStyles.small.copyWith(
                             fontSize: 11,
                             color: AppColors.greyText,
@@ -110,7 +108,7 @@ class SelectedCheckpointCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          "Estimated Time: ${marker.estimatedTime ?? '--'}",
+                          "Estimated Time: ${marker.estimatedTime}",
                           style: AppTextStyles.small.copyWith(
                             fontSize: 11,
                             color: AppColors.greyText,

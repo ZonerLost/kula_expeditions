@@ -4,7 +4,6 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import '../../../constants/app_colors.dart';
 import '../../../constants/map_filter_chips.dart';
 import '../../../constants/map_floating_buttons.dart';
-import '../../../constants/map_marker_card.dart';
 import '../../../constants/map_search_bar.dart';
 import '../../../constants/selected_checkpoint_card.dart';
 import '../../../modules/onboarding/model/map_package_model.dart';
@@ -27,35 +26,73 @@ class MapScreenView extends GetView<MapScreenController> {
             Positioned.fill(
               child: MapWidget(
                 key: const ValueKey('mapbox_map'),
-                onMapCreated: controller.onMapCreated,
+                onMapCreated: (map) => controller.onMapCreated(map),
+                onMapIdleListener: (_) => controller.onMapIdle(),
+                onCameraChangeListener: controller.onCameraChanged,
                 styleUri: MapPackageModel.styleUrl,
                 viewport: CameraViewportState(
-                  center: Point(
-                    coordinates: Position(19.9, 42.7),
-                  ),
+                  center: Point(coordinates: Position(19.9, 42.7)),
                   zoom: 8.0,
                 ),
+                gestureRecognizers: const {},
               ),
             ),
             Positioned(
               top: MediaQuery.of(context).size.height * 0.03,
               left: MediaQuery.of(context).size.width * 0.06,
               right: MediaQuery.of(context).size.width * 0.06,
-              child: MapSearchBar(
-                onTap: controller.onSearchTap,
-              ),
-            ),
-            Obx(
-              () => MapFilterChips(
-                chips: controller.chips,
-                selectedIndex: controller.selectedChipIndex.value,
-                onChipTap: controller.changeChipIndex,
-              ),
-            ),
-            ...controller.markers.map(
-              (marker) => MapMarkerCard(
-                marker: marker,
-                onTap: () => controller.onMarkerTap(marker),
+              child: Obx(
+                () => Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    MapSearchBar(
+                      onChanged: controller.onSearchChanged,
+                      suggestions: controller.searchSuggestions.toList(),
+                      onSuggestionTap: controller.onSuggestionSelected,
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: MediaQuery.of(context).size.height * 0.04,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: controller.chips.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                        itemBuilder: (context, index) {
+                          final isSelected = controller.selectedChipIndex.value == index;
+                          return GestureDetector(
+                            onTap: () => controller.changeChipIndex(index),
+                            child: Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: MediaQuery.of(context).size.width * 0.035,
+                                vertical: MediaQuery.of(context).size.height * 0.008,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.chipBg,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? AppColors.navSelected
+                                      : AppColors.chipBorder,
+                                ),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  controller.chips[index],
+                                  style: TextStyle(
+                                    fontSize: MediaQuery.of(context).size.width * 0.03,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.black,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             MapFloatingButtons(
@@ -84,9 +121,7 @@ class MapScreenView extends GetView<MapScreenController> {
                         );
 
                 case MapBottomCardType.stageGuide:
-                  return StageGuideCard(
-                    onClose: controller.onCloseStageGuide,
-                  );
+                  return StageGuideCard(onClose: controller.onCloseStageGuide);
 
                 case MapBottomCardType.selectedCheckpoint:
                   return controller.selectedMarker.value == null

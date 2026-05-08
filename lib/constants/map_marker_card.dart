@@ -8,23 +8,17 @@ class MapMarkerCard extends StatelessWidget {
   final MapMarkerModel marker;
   final VoidCallback onTap;
 
-  const MapMarkerCard({
-    super.key,
-    required this.marker,
-    required this.onTap,
-  });
+  const MapMarkerCard({super.key, required this.marker, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      top: context.screenHeight * marker.top,
-      left: context.screenWidth * marker.left,
+      top: marker.top - (context.screenHeight * 0.015),
+      left: marker.left - (context.screenWidth * 0.08),
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          constraints: BoxConstraints(
-            maxWidth: context.screenWidth * 0.30,
-          ),
+          constraints: BoxConstraints(maxWidth: context.screenWidth * 0.30),
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
             color: AppColors.white,
@@ -43,7 +37,9 @@ class MapMarkerCard extends StatelessWidget {
               CircleAvatar(
                 radius: 10,
                 backgroundColor: Colors.transparent,
-                backgroundImage: AssetImage(marker.imagePath),
+                backgroundImage: marker.imageUrl.isNotEmpty
+                    ? NetworkImage(marker.imageUrl)
+                    : AssetImage(marker.imagePath) as ImageProvider,
               ),
               const SizedBox(width: 4),
               Flexible(

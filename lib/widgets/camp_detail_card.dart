@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:kuala_exp/extension/context_extension.dart';
+
 import '../../../constants/app_colors.dart';
 import '../../../constants/app_text_styles.dart';
 import '../modules/map/model/map_marker_model.dart';
@@ -31,9 +32,7 @@ class CampDetailCard extends StatelessWidget {
         ),
         decoration: const BoxDecoration(
           color: AppColors.white,
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(22),
-          ),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
           boxShadow: [
             BoxShadow(
               color: Color(0x18000000),
@@ -50,8 +49,10 @@ class CampDetailCard extends StatelessWidget {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(18),
-                  child: Image.asset(
-                    marker.checkpointImage,
+                  child: Image(
+                    image: marker.imageUrl.isNotEmpty
+                        ? NetworkImage(marker.imageUrl)
+                        : AssetImage(marker.checkpointImage),
                     width: double.infinity,
                     height: context.screenHeight * 0.22,
                     fit: BoxFit.cover,
@@ -66,7 +67,7 @@ class CampDetailCard extends StatelessWidget {
                       width: 28,
                       height: 28,
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.25),
+                        color: Colors.black.withValues(alpha: 0.25),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -90,7 +91,9 @@ class CampDetailCard extends StatelessWidget {
             ),
             SizedBox(height: context.screenHeight * 0.010),
             Text(
-              'A quiet grass clearing used by local shepherds in summer. Fresh water stream 50m downhill. Suitable for 2–3 tents. No facilities, but sheltered from strong winds and close to the main trail.',
+              marker.description.isNotEmpty
+                  ? marker.description
+                  : 'No description available for this POI.',
               style: AppTextStyles.small.copyWith(
                 fontSize: 12,
                 color: AppColors.greyText,
@@ -125,7 +128,7 @@ class CampDetailCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              '43.34334, 20.32423',
+              '${marker.latitude.toStringAsFixed(5)}, ${marker.longitude.toStringAsFixed(5)}',
               style: AppTextStyles.small.copyWith(
                 fontSize: 12,
                 color: AppColors.greyText,

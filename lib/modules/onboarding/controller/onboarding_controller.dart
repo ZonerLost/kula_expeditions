@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import '../../../constants/app_strings.dart';
 import '../model/onboarding_model.dart';
@@ -79,6 +80,7 @@ class OnboardingController extends GetxController {
     if (_currentPackage == null) return;
     _downloadCancelled = false;
 
+    debugPrint('[Onboarding] Starting map download...');
     MapPackageService.downloadPackage(
       _currentPackage!,
       onProgress: (p) {
@@ -88,10 +90,12 @@ class OnboardingController extends GetxController {
       },
     ).then((_) {
       if (!_downloadCancelled) {
+        debugPrint('[Onboarding] Download complete. Navigating to shell...');
         _downloadComplete = true;
         currentIndex.value = 2;
       }
     }).catchError((e) {
+      debugPrint('[Onboarding] Download failed: $e');
       if (!_downloadCancelled) {
         currentIndex.value = 0;
         progress.value = 0.0;
