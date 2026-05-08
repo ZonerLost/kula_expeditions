@@ -31,6 +31,13 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        val properties = org.jetbrains.kotlin.konan.properties.Properties()
+        val envFile = rootProject.file("../../.env")
+        if (envFile.exists()) {
+            envFile.inputStream().use { properties.load(it) }
+        }
+        manifestPlaceholders["MAPBOX_ACCESS_TOKEN"] = properties.getProperty("MAPBOX_ACCESS_TOKEN", "")
     }
 
     buildTypes {

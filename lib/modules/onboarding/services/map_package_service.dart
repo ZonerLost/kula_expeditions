@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../model/map_package_model.dart';
@@ -45,6 +46,7 @@ class MapPackageService {
     MapPackageModel package, {
     required void Function(double progress) onProgress,
   }) async {
+    MapboxOptions.setAccessToken(dotenv.env['MAPBOX_DOWNLOAD_TOKEN'] ?? '');
     final tileStore = await TileStore.createDefault();
 
     final descriptorOptions = TilesetDescriptorOptions(
