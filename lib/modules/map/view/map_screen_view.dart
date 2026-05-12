@@ -37,7 +37,7 @@ class MapScreenView extends GetView<MapScreenController> {
               ),
             ),
             Positioned(
-              top: MediaQuery.of(context).size.height * 0.03,
+              top: MediaQuery.of(context).size.height * 0.08,
               left: MediaQuery.of(context).size.width * 0.06,
               right: MediaQuery.of(context).size.width * 0.06,
               child: Obx(

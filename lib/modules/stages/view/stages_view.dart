@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../../../constants/app_colors.dart';
 import '../../../extension/context_extension.dart';
 import '../../../widgets/stage_item_card.dart';
 import '../../../widgets/stages_header.dart';

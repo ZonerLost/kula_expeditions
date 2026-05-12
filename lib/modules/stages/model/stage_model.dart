@@ -15,6 +15,10 @@ class StageModel {
   final String importantNotes;
   final String pdfGuideUrl;
   final String pdfCoverUrl;
+  final double startLat;
+  final double startLon;
+  final double endLat;
+  final double endLon;
 
   const StageModel({
     required this.id,
@@ -33,6 +37,10 @@ class StageModel {
     required this.importantNotes,
     required this.pdfGuideUrl,
     required this.pdfCoverUrl,
+    required this.startLat,
+    required this.startLon,
+    required this.endLat,
+    required this.endLon,
   });
 
   factory StageModel.fromFirestore(Map<String, dynamic> data, String id) {
@@ -53,7 +61,61 @@ class StageModel {
       importantNotes: data['importantNotes'] ?? '',
       pdfGuideUrl: data['pdfGuideUrl'] ?? '',
       pdfCoverUrl: data['pdfCoverUrl'] ?? '',
+      startLat: _toDouble(data['startLat']),
+      startLon: _toDouble(data['startLon']),
+      endLat: _toDouble(data['endLat']),
+      endLon: _toDouble(data['endLon']),
     );
+  }
+
+  factory StageModel.fromJson(Map<String, dynamic> data) {
+    return StageModel(
+      id: (data['id'] ?? '').toString(),
+      title: (data['title'] ?? '').toString(),
+      subtitle: (data['subtitle'] ?? '').toString(),
+      description: (data['description'] ?? '').toString(),
+      distanceKm: (data['distanceKm'] ?? 0).toInt(),
+      estimatedMinutes: (data['estimatedMinutes'] ?? 0).toInt(),
+      difficulty: (data['difficulty'] ?? '').toString(),
+      elevationLabel: (data['elevationLabel'] ?? '').toString(),
+      coverImageUrl: (data['coverImageUrl'] ?? '').toString(),
+      status: (data['status'] ?? '').toString(),
+      order: (data['order'] ?? 0).toInt(),
+      trailId: (data['trailId'] ?? '').toString(),
+      waterAndCamps: (data['waterAndCamps'] ?? '').toString(),
+      importantNotes: (data['importantNotes'] ?? '').toString(),
+      pdfGuideUrl: (data['pdfGuideUrl'] ?? '').toString(),
+      pdfCoverUrl: (data['pdfCoverUrl'] ?? '').toString(),
+      startLat: _toDouble(data['startLat']),
+      startLon: _toDouble(data['startLon']),
+      endLat: _toDouble(data['endLat']),
+      endLon: _toDouble(data['endLon']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'subtitle': subtitle,
+      'description': description,
+      'distanceKm': distanceKm,
+      'estimatedMinutes': estimatedMinutes,
+      'difficulty': difficulty,
+      'elevationLabel': elevationLabel,
+      'coverImageUrl': coverImageUrl,
+      'status': status,
+      'order': order,
+      'trailId': trailId,
+      'waterAndCamps': waterAndCamps,
+      'importantNotes': importantNotes,
+      'pdfGuideUrl': pdfGuideUrl,
+      'pdfCoverUrl': pdfCoverUrl,
+      'startLat': startLat,
+      'startLon': startLon,
+      'endLat': endLat,
+      'endLon': endLon,
+    };
   }
 
   String get distanceLabel => '$distanceKm km';
@@ -66,4 +128,12 @@ class StageModel {
   }
 
   bool get isLocked => status != 'published';
+
+  bool get hasValidCoordinates =>
+      startLat != 0 && startLon != 0 && endLat != 0 && endLon != 0;
+
+  static double _toDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
+  }
 }

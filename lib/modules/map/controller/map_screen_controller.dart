@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -7,20 +8,28 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:get/get.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../constants/app_imges.dart';
 import '../../../services/location_service.dart';
 import '../../../utils/vincenty_util.dart';
 import '../../onboarding/model/map_package_model.dart';
+import '../../stages/model/stage_model.dart';
 import '../model/map_marker_model.dart';
 import '../model/poi_category_model.dart';
 import '../model/poi_model.dart';
 
-enum MapBottomCardType { none, selectedCheckpoint, lockedTrail, campDetail, stageGuide }
+enum MapBottomCardType {
+  none,
+  selectedCheckpoint,
+  lockedTrail,
+  campDetail,
+  stageGuide,
+}
 
 class MapScreenController extends GetxController {
   MapScreenController({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+    : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
 
@@ -51,6 +60,7 @@ class MapScreenController extends GetxController {
 
   StreamSubscription<QuerySnapshot>? _poisSub;
   StreamSubscription<QuerySnapshot>? _categoriesSub;
+  StreamSubscription<QuerySnapshot>? _stagesSub;
   StreamSubscription<geo.Position>? _gpsSub;
   Timer? _etaTimer;
   Timer? _zoomDebounce;
@@ -63,6 +73,18 @@ class MapScreenController extends GetxController {
   double _currentZoom = 8.0;
   double? _cameraLat;
   double? _cameraLng;
+  bool _didCenterOnUserAtStartup = false;
+  final List<StageModel> _orderedStages = [];
+  int _activeStageIndex = 0;
+  bool _targetingEndPoint = false;
+  bool _stageProgressLoaded = false;
+  MapMarkerModel? _activeStageTargetMarker;
+  SharedPreferences? _prefs;
+
+  static const double _arrivalThresholdMetres = 80.0;
+  static const String _prefsStageIndexKey = 'stage_nav_active_index';
+  static const String _prefsTargetingEndKey = 'stage_nav_targeting_end';
+  static const String _prefsStagesCacheKey = 'stage_nav_cached_stages_json';
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
   @override
@@ -70,6 +92,8 @@ class MapScreenController extends GetxController {
     super.onInit();
     _listenPoiCategories();
     _listenPois();
+    _bootstrapStageNavigation();
+    _listenStages();
     _startGps();
   }
 
@@ -80,6 +104,7 @@ class MapScreenController extends GetxController {
     _gpsSub?.cancel();
     _poisSub?.cancel();
     _categoriesSub?.cancel();
+    _stagesSub?.cancel();
     super.onClose();
   }
 
@@ -91,23 +116,35 @@ class MapScreenController extends GetxController {
       return;
     }
 
-    _gpsSub = LocationService.instance.positionStream.listen((geo.Position pos) {
+    _gpsSub = LocationService.instance.positionStream.listen((
+      geo.Position pos,
+    ) {
       userLat.value = pos.latitude;
       userLng.value = pos.longitude;
       _updateBlueDot(pos.latitude, pos.longitude);
+      _centerOnUserAtStartup(durationMs: 900);
+      _advanceStageProgressIfArrived(pos.latitude, pos.longitude);
     });
 
     // 5-second ETA refresh timer
-    _etaTimer = Timer.periodic(const Duration(seconds: 5), (_) => _refreshEta());
+    _etaTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _refreshEta(),
+    );
   }
 
   void _refreshEta() {
     final lat = userLat.value;
     final lng = userLng.value;
-    final marker = selectedMarker.value;
+    final marker = selectedMarker.value ?? _activeStageTargetMarker;
     if (lat == null || lng == null || marker == null) return;
 
-    final metres = VincentyUtil.distanceMetres(lat, lng, marker.latitude, marker.longitude);
+    final metres = VincentyUtil.distanceMetres(
+      lat,
+      lng,
+      marker.latitude,
+      marker.longitude,
+    );
     liveDistance.value = VincentyUtil.formatDistance(metres);
     liveEta.value = VincentyUtil.formatEta(metres);
   }
@@ -137,15 +174,21 @@ class MapScreenController extends GetxController {
   void _listenPoiCategories() {
     _categoriesSub = _firestore.collection('poi_categories').snapshots().listen(
       (snapshot) {
-        final active = snapshot.docs
-            .map((d) => PoiCategoryModel.fromFirestore(d.data(), d.id))
-            .where((c) => c.status.trim().toLowerCase() == 'active')
-            .toList()
-          ..sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
+        final active =
+            snapshot.docs
+                .map((d) => PoiCategoryModel.fromFirestore(d.data(), d.id))
+                .where((c) => c.status.trim().toLowerCase() == 'active')
+                .toList()
+              ..sort(
+                (a, b) =>
+                    a.label.toLowerCase().compareTo(b.label.toLowerCase()),
+              );
 
         categories.assignAll(active);
         chips.assignAll(['All', ...active.map((c) => c.label)]);
-        if (selectedChipIndex.value >= chips.length) selectedChipIndex.value = 0;
+        if (selectedChipIndex.value >= chips.length) {
+          selectedChipIndex.value = 0;
+        }
         _applyFiltersAndRefreshMarkers();
       },
       onError: (e) => debugPrint('Error loading categories: $e'),
@@ -153,26 +196,72 @@ class MapScreenController extends GetxController {
   }
 
   void _listenPois() {
-    _poisSub = _firestore.collection('pois').snapshots().listen(
-      (snapshot) {
-        final active = snapshot.docs
-            .map((d) => PoiModel.fromFirestore(d.data(), d.id))
-            .where((p) => p.status.trim().toLowerCase() == 'active')
-            .where((p) => p.latitude != 0 && p.longitude != 0)
-            .toList()
-          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    _poisSub = _firestore
+        .collection('pois')
+        .snapshots()
+        .listen(
+          (snapshot) {
+            final active =
+                snapshot.docs
+                    .map((d) => PoiModel.fromFirestore(d.data(), d.id))
+                    .where((p) => p.status.trim().toLowerCase() == 'active')
+                    .where((p) => p.latitude != 0 && p.longitude != 0)
+                    .toList()
+                  ..sort(
+                    (a, b) =>
+                        a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+                  );
 
-        _allPois
-          ..clear()
-          ..addAll(active);
-        _applyFiltersAndRefreshMarkers();
-        isLoading.value = false;
-      },
-      onError: (e) {
-        debugPrint('Error loading POIs: $e');
-        isLoading.value = false;
-      },
-    );
+            _allPois
+              ..clear()
+              ..addAll(active);
+            _applyFiltersAndRefreshMarkers();
+            isLoading.value = false;
+          },
+          onError: (e) {
+            debugPrint('Error loading POIs: $e');
+            isLoading.value = false;
+          },
+        );
+  }
+
+  Future<void> _bootstrapStageNavigation() async {
+    _prefs = await SharedPreferences.getInstance();
+    _activeStageIndex = _prefs?.getInt(_prefsStageIndexKey) ?? 0;
+    _targetingEndPoint = _prefs?.getBool(_prefsTargetingEndKey) ?? false;
+    _stageProgressLoaded = true;
+    _loadCachedStages();
+    _setStageTargetMarker(flyToTarget: false);
+  }
+
+  void _listenStages() {
+    _stagesSub = _firestore
+        .collection('stages')
+        .orderBy('order')
+        .snapshots()
+        .listen(
+          (snapshot) {
+            final published =
+                snapshot.docs
+                    .map((d) => StageModel.fromFirestore(d.data(), d.id))
+                    .where((s) => s.status.trim().toLowerCase() == 'published')
+                    .where((s) => s.hasValidCoordinates)
+                    .toList()
+                  ..sort((a, b) => a.order.compareTo(b.order));
+
+            _orderedStages
+              ..clear()
+              ..addAll(published);
+
+            _saveStagesCache();
+            _normalizeStageProgress();
+            _setStageTargetMarker(flyToTarget: true);
+          },
+          onError: (e) {
+            debugPrint('Error loading stages: $e');
+            _setStageTargetMarker(flyToTarget: false);
+          },
+        );
   }
 
   // ── Filtering & annotations ───────────────────────────────────────────────
@@ -221,18 +310,32 @@ class MapScreenController extends GetxController {
 
     final currentId = selectedMarker.value?.id;
     if (currentId != null) {
+      if (currentId.startsWith('stage-')) {
+        selectedMarker.value = _activeStageTargetMarker;
+        if (selectedMarker.value != null) {
+          currentCard.value = MapBottomCardType.selectedCheckpoint;
+          _refreshEta();
+        }
+        return;
+      }
       selectedMarker.value = _findMarkerById(baseMarkers, currentId);
-      if (selectedMarker.value == null) currentCard.value = MapBottomCardType.none;
+      if (selectedMarker.value == null) {
+        currentCard.value = MapBottomCardType.none;
+      }
     }
   }
 
   double _distanceToPoiMetres(double poiLat, double poiLng) {
-    final fromLat = userLat.value ??
+    final fromLat =
+        userLat.value ??
         _cameraLat ??
-        MapPackageModel.minLat + (MapPackageModel.maxLat - MapPackageModel.minLat) / 2;
-    final fromLng = userLng.value ??
+        MapPackageModel.minLat +
+            (MapPackageModel.maxLat - MapPackageModel.minLat) / 2;
+    final fromLng =
+        userLng.value ??
         _cameraLng ??
-        MapPackageModel.minLng + (MapPackageModel.maxLng - MapPackageModel.minLng) / 2;
+        MapPackageModel.minLng +
+            (MapPackageModel.maxLng - MapPackageModel.minLng) / 2;
     return VincentyUtil.distanceMetres(fromLat, fromLng, poiLat, poiLng);
   }
 
@@ -309,6 +412,8 @@ class MapScreenController extends GetxController {
     final lat = userLat.value;
     final lng = userLng.value;
     if (lat != null && lng != null) _updateBlueDot(lat, lng);
+    _centerOnUserAtStartup(durationMs: 0);
+    _setStageTargetMarker(flyToTarget: false);
   }
 
   Future<void> onCameraChanged(CameraChangedEventData event) async {
@@ -320,7 +425,10 @@ class MapScreenController extends GetxController {
     if ((zoom - _currentZoom).abs() < 0.2) return;
     _currentZoom = zoom;
     _zoomDebounce?.cancel();
-    _zoomDebounce = Timer(const Duration(milliseconds: 150), _updateAnnotationSizes);
+    _zoomDebounce = Timer(
+      const Duration(milliseconds: 150),
+      _updateAnnotationSizes,
+    );
   }
 
   Future<void> onMapIdle() async {}
@@ -355,7 +463,10 @@ class MapScreenController extends GetxController {
     }
     final q = value.trim().toLowerCase();
     searchSuggestions.assignAll(
-      _allPois.where((p) => p.name.toLowerCase().contains(q)).take(5).map((p) => p.name),
+      _allPois
+          .where((p) => p.name.toLowerCase().contains(q))
+          .take(5)
+          .map((p) => p.name),
     );
     _applyFiltersAndRefreshMarkers();
   }
@@ -415,9 +526,190 @@ class MapScreenController extends GetxController {
   void onCloseCampDetail() => currentCard.value = MapBottomCardType.none;
   void onCloseStageGuide() => currentCard.value = MapBottomCardType.none;
   void onMapTap() {}
-  void onDirectionTap() {}
+  void onDirectionTap() => _flyToActiveStageTarget();
+
+  void _centerOnUserAtStartup({required int durationMs}) {
+    if (_didCenterOnUserAtStartup) return;
+
+    final map = mapboxMap;
+    final lat = userLat.value;
+    final lng = userLng.value;
+    if (map == null || lat == null || lng == null) return;
+
+    _didCenterOnUserAtStartup = true;
+    map.flyTo(
+      CameraOptions(
+        center: Point(coordinates: Position(lng, lat)),
+        zoom: 14.0,
+        pitch: 0,
+      ),
+      MapAnimationOptions(duration: durationMs, startDelay: 0),
+    );
+  }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+  void _normalizeStageProgress() {
+    if (_orderedStages.isEmpty) {
+      _activeStageIndex = 0;
+      _targetingEndPoint = false;
+      return;
+    }
+    if (_activeStageIndex < 0) {
+      _activeStageIndex = 0;
+      _targetingEndPoint = false;
+    } else if (_activeStageIndex >= _orderedStages.length) {
+      _activeStageIndex = _orderedStages.length - 1;
+      _targetingEndPoint = true;
+    }
+  }
+
+  StageModel? _stageForCurrentProgress() {
+    if (!_stageProgressLoaded || _orderedStages.isEmpty) return null;
+    if (_activeStageIndex < 0 || _activeStageIndex >= _orderedStages.length) {
+      return null;
+    }
+    return _orderedStages[_activeStageIndex];
+  }
+
+  void _setStageTargetMarker({required bool flyToTarget}) {
+    final stage = _stageForCurrentProgress();
+    if (stage == null) return;
+    final isEndTarget = _targetingEndPoint;
+    final targetLat = isEndTarget ? stage.endLat : stage.startLat;
+    final targetLon = isEndTarget ? stage.endLon : stage.startLon;
+    final targetName = isEndTarget
+        ? _extractStageEndName(stage.title)
+        : _extractStageStartName(stage.title);
+    _activeStageTargetMarker = MapMarkerModel(
+      id: 'stage-${stage.id}-${isEndTarget ? 'end' : 'start'}',
+      title: targetName,
+      subtitle: isEndTarget
+          ? 'Stage ${stage.order} end'
+          : 'Stage ${stage.order} start',
+      description: stage.subtitle,
+      categoryId: 'stage_target',
+      latitude: targetLat,
+      longitude: targetLon,
+      imagePath: AppImages.stage1,
+      imageUrl: stage.coverImageUrl,
+      top: 0,
+      left: 0,
+      checkpointImage: AppImages.stage1,
+      distance: '',
+      estimatedTime: '',
+    );
+    selectedMarker.value = _activeStageTargetMarker;
+    currentCard.value = MapBottomCardType.selectedCheckpoint;
+    _refreshEta();
+    if (flyToTarget) {
+      _flyToActiveStageTarget();
+    }
+  }
+
+  void _flyToActiveStageTarget() {
+    final target = _activeStageTargetMarker;
+    if (target == null) return;
+    mapboxMap?.flyTo(
+      CameraOptions(
+        center: Point(coordinates: Position(target.longitude, target.latitude)),
+        zoom: 12.8,
+        pitch: 0,
+      ),
+      MapAnimationOptions(duration: 900, startDelay: 0),
+    );
+  }
+
+  Future<void> _persistStageProgress() async {
+    final prefs = _prefs;
+    if (prefs == null) return;
+    await prefs.setInt(_prefsStageIndexKey, _activeStageIndex);
+    await prefs.setBool(_prefsTargetingEndKey, _targetingEndPoint);
+  }
+
+  Future<void> _saveStagesCache() async {
+    final prefs = _prefs;
+    if (prefs == null) return;
+    final list = _orderedStages.map((s) => s.toJson()).toList(growable: false);
+    await prefs.setString(_prefsStagesCacheKey, jsonEncode(list));
+  }
+
+  void _loadCachedStages() {
+    if (_orderedStages.isNotEmpty) return;
+    final raw = _prefs?.getString(_prefsStagesCacheKey);
+    if (raw == null || raw.isEmpty) return;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return;
+      final cached =
+          decoded
+              .whereType<Map>()
+              .map((e) => StageModel.fromJson(Map<String, dynamic>.from(e)))
+              .where((s) => s.status.trim().toLowerCase() == 'published')
+              .where((s) => s.hasValidCoordinates)
+              .toList()
+            ..sort((a, b) => a.order.compareTo(b.order));
+      _orderedStages
+        ..clear()
+        ..addAll(cached);
+      _normalizeStageProgress();
+    } catch (e) {
+      debugPrint('Failed to parse cached stages: $e');
+    }
+  }
+
+  void _advanceStageProgressIfArrived(
+    double userLatitude,
+    double userLongitude,
+  ) {
+    final stage = _stageForCurrentProgress();
+    if (stage == null) return;
+    final targetLat = _targetingEndPoint ? stage.endLat : stage.startLat;
+    final targetLon = _targetingEndPoint ? stage.endLon : stage.startLon;
+    final metres = VincentyUtil.distanceMetres(
+      userLatitude,
+      userLongitude,
+      targetLat,
+      targetLon,
+    );
+    if (metres > _arrivalThresholdMetres) return;
+    if (!_targetingEndPoint) {
+      _targetingEndPoint = true;
+      _persistStageProgress();
+      _setStageTargetMarker(flyToTarget: true);
+      return;
+    }
+    if (_activeStageIndex + 1 < _orderedStages.length) {
+      _activeStageIndex += 1;
+      _targetingEndPoint = false;
+      _persistStageProgress();
+      _setStageTargetMarker(flyToTarget: true);
+      return;
+    }
+    _persistStageProgress();
+  }
+
+  String _extractStageStartName(String stageTitle) {
+    final title = stageTitle.trim();
+    if (title.isEmpty) return 'Stage start';
+    final afterColon = title.contains(':')
+        ? title.split(':').last.trim()
+        : title;
+    final parts = afterColon.split(RegExp(r'\s+to\s+', caseSensitive: false));
+    final start = parts.isNotEmpty ? parts.first.trim() : afterColon;
+    return start.isEmpty ? 'Stage start' : start;
+  }
+
+  String _extractStageEndName(String stageTitle) {
+    final title = stageTitle.trim();
+    if (title.isEmpty) return 'Stage end';
+    final afterColon = title.contains(':')
+        ? title.split(':').last.trim()
+        : title;
+    final parts = afterColon.split(RegExp(r'\s+to\s+', caseSensitive: false));
+    final end = parts.length > 1 ? parts.last.trim() : afterColon;
+    return end.isEmpty ? 'Stage end' : end;
+  }
+
   PoiCategoryModel? _findCategoryById(String id) {
     for (final c in categories) {
       if (c.id == id) return c;
@@ -441,13 +733,19 @@ class MapScreenController extends GetxController {
     final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, w, h + tailH));
 
     canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(4, 4, w - 8, h), const Radius.circular(r)),
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(4, 4, w - 8, h),
+        const Radius.circular(r),
+      ),
       Paint()
         ..color = const Color(0x40000000)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
     );
     canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, w, h), const Radius.circular(r)),
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, 0, w, h),
+        const Radius.circular(r),
+      ),
       Paint()..color = const Color(0xFFFFFFFF),
     );
     canvas.drawPath(
@@ -487,7 +785,10 @@ class MapScreenController extends GetxController {
       maxLines: 1,
       ellipsis: '…',
     )..layout(maxWidth: w - avatarCx * 2 - 20);
-    titlePainter.paint(canvas, Offset(avatarCx * 2 + 8, avatarCy - titlePainter.height - 3));
+    titlePainter.paint(
+      canvas,
+      Offset(avatarCx * 2 + 8, avatarCy - titlePainter.height - 3),
+    );
 
     if (subtitle.isNotEmpty) {
       final subtitlePainter = TextPainter(
@@ -515,5 +816,6 @@ class _AnnotationClickListener extends OnPointAnnotationClickListener {
   _AnnotationClickListener({required this.onAnnotationClick});
 
   @override
-  void onPointAnnotationClick(PointAnnotation annotation) => onAnnotationClick(annotation);
+  void onPointAnnotationClick(PointAnnotation annotation) =>
+      onAnnotationClick(annotation);
 }
