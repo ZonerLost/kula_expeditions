@@ -39,6 +39,7 @@ class MapScreenController extends GetxController {
   final searchSuggestions = <String>[].obs;
   final selectedMarker = Rxn<MapMarkerModel>();
   final lockedMarker = Rxn<MapMarkerModel>();
+  final poiMarker = Rxn<MapMarkerModel>(); // POI tapped while checkpoint is shown
   final currentCard = MapBottomCardType.none.obs;
   final chips = <String>[].obs;
   final categories = <PoiCategoryModel>[].obs;
@@ -495,17 +496,28 @@ class MapScreenController extends GetxController {
     if (marker.isLocked) {
       lockedMarker.value = marker;
       selectedMarker.value = null;
+      poiMarker.value = null;
       currentCard.value = MapBottomCardType.lockedTrail;
       return;
     }
+    if (currentCard.value == MapBottomCardType.selectedCheckpoint) {
+      poiMarker.value = marker;
+      return;
+    }
     lockedMarker.value = null;
+    poiMarker.value = null;
     selectedMarker.value = marker;
     currentCard.value = MapBottomCardType.selectedCheckpoint;
     _refreshEta();
   }
 
+  void onClosePoiMarker() {
+    poiMarker.value = null;
+  }
+
   void onCloseSelectedCheckpoint() {
     selectedMarker.value = null;
+    poiMarker.value = null;
     liveDistance.value = '';
     liveEta.value = '';
     currentCard.value = MapBottomCardType.none;

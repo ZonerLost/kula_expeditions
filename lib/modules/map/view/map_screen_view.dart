@@ -146,12 +146,14 @@ class MapScreenView extends GetView<MapScreenController> {
                 case MapBottomCardType.selectedCheckpoint:
                   return controller.selectedMarker.value == null
                       ? const SizedBox.shrink()
-                      : SelectedCheckpointCard(
-                          marker: controller.selectedMarker.value!,
-                          onClose: controller.onCloseSelectedCheckpoint,
-                          liveDistance: controller.liveDistance.value,
-                          liveEta: controller.liveEta.value,
-                        );
+                      : Obx(() => SelectedCheckpointCard(
+                            marker: controller.selectedMarker.value!,
+                            onClose: controller.onCloseSelectedCheckpoint,
+                            liveDistance: controller.liveDistance.value,
+                            liveEta: controller.liveEta.value,
+                            poiMarker: controller.poiMarker.value,
+                            onClosePoi: controller.onClosePoiMarker,
+                          ));
 
                 case MapBottomCardType.none:
                   return const SizedBox.shrink();
