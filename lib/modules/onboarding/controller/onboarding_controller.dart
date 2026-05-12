@@ -84,13 +84,11 @@ class OnboardingController extends GetxController {
     MapPackageService.downloadPackage(
       _currentPackage!,
       onProgress: (p) {
-        if (!_downloadCancelled) {
-          progress.value = p;
-        }
+        if (!_downloadCancelled) progress.value = p;
       },
     ).then((_) {
       if (!_downloadCancelled) {
-        debugPrint('[Onboarding] Download complete. Navigating to shell...');
+        debugPrint('[Onboarding] Download complete.');
         _downloadComplete = true;
         currentIndex.value = 2;
       }
@@ -99,6 +97,14 @@ class OnboardingController extends GetxController {
       if (!_downloadCancelled) {
         currentIndex.value = 0;
         progress.value = 0.0;
+        // Surface Wi-Fi requirement to the user
+        if (e.toString().contains('Wi-Fi')) {
+          Get.snackbar(
+            'Wi-Fi Required',
+            'Please connect to Wi-Fi to download the offline map (~600 MB).',
+            duration: const Duration(seconds: 4),
+          );
+        }
       }
     });
   }

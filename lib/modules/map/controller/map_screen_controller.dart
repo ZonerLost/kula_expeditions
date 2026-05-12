@@ -1,92 +1,151 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart' as geo;
 import 'package:get/get.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 import '../../../constants/app_imges.dart';
+import '../../../services/location_service.dart';
+import '../../../utils/vincenty_util.dart';
 import '../../onboarding/model/map_package_model.dart';
 import '../model/map_marker_model.dart';
 import '../model/poi_category_model.dart';
 import '../model/poi_model.dart';
 
-enum MapBottomCardType {
-  none,
-  selectedCheckpoint,
-  lockedTrail,
-  campDetail,
-  stageGuide,
-}
+enum MapBottomCardType { none, selectedCheckpoint, lockedTrail, campDetail, stageGuide }
 
 class MapScreenController extends GetxController {
   MapScreenController({FirebaseFirestore? firestore})
-    : _firestore = firestore ?? FirebaseFirestore.instance;
+      : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
 
+  // ── Observables ──────────────────────────────────────────────────────────
   final selectedChipIndex = 0.obs;
   final searchQuery = ''.obs;
   final searchSuggestions = <String>[].obs;
   final selectedMarker = Rxn<MapMarkerModel>();
   final lockedMarker = Rxn<MapMarkerModel>();
   final currentCard = MapBottomCardType.none.obs;
-
   final chips = <String>[].obs;
   final categories = <PoiCategoryModel>[].obs;
   final markers = <MapMarkerModel>[].obs;
   final isLoading = true.obs;
 
+  // Live GPS observables (updated every 1 s)
+  final userLat = Rxn<double>();
+  final userLng = Rxn<double>();
+
+  // Distance / ETA to selected checkpoint (updated every 5 s)
+  final liveDistance = ''.obs;
+  final liveEta = ''.obs;
+
+  // ── Private state ─────────────────────────────────────────────────────────
   final List<PoiModel> _allPois = [];
   final List<MapMarkerModel> _currentMarkers = [];
   final List<PointAnnotation> _annotations = [];
 
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _poisSub;
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _categoriesSub;
+  StreamSubscription<QuerySnapshot>? _poisSub;
+  StreamSubscription<QuerySnapshot>? _categoriesSub;
+  StreamSubscription<geo.Position>? _gpsSub;
+  Timer? _etaTimer;
+  Timer? _zoomDebounce;
 
   MapboxMap? mapboxMap;
   PointAnnotationManager? _annotationManager;
+  CircleAnnotationManager? _blueDotManager;
+  CircleAnnotation? _blueDotAnnotation;
+
   double _currentZoom = 8.0;
   double? _cameraLat;
   double? _cameraLng;
-  Timer? _zoomDebounce;
 
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
   @override
   void onInit() {
     super.onInit();
     _listenPoiCategories();
     _listenPois();
+    _startGps();
   }
 
+  @override
+  void onClose() {
+    _zoomDebounce?.cancel();
+    _etaTimer?.cancel();
+    _gpsSub?.cancel();
+    _poisSub?.cancel();
+    _categoriesSub?.cancel();
+    super.onClose();
+  }
+
+  // ── GPS ───────────────────────────────────────────────────────────────────
+  void _startGps() async {
+    final granted = await LocationService.instance.requestPermission();
+    if (!granted) {
+      debugPrint('[Map] Location permission denied');
+      return;
+    }
+
+    _gpsSub = LocationService.instance.positionStream.listen((geo.Position pos) {
+      userLat.value = pos.latitude;
+      userLng.value = pos.longitude;
+      _updateBlueDot(pos.latitude, pos.longitude);
+    });
+
+    // 5-second ETA refresh timer
+    _etaTimer = Timer.periodic(const Duration(seconds: 5), (_) => _refreshEta());
+  }
+
+  void _refreshEta() {
+    final lat = userLat.value;
+    final lng = userLng.value;
+    final marker = selectedMarker.value;
+    if (lat == null || lng == null || marker == null) return;
+
+    final metres = VincentyUtil.distanceMetres(lat, lng, marker.latitude, marker.longitude);
+    liveDistance.value = VincentyUtil.formatDistance(metres);
+    liveEta.value = VincentyUtil.formatEta(metres);
+  }
+
+  Future<void> _updateBlueDot(double lat, double lng) async {
+    final manager = _blueDotManager;
+    if (manager == null) return;
+
+    if (_blueDotAnnotation == null) {
+      _blueDotAnnotation = await manager.create(
+        CircleAnnotationOptions(
+          geometry: Point(coordinates: Position(lng, lat)),
+          circleRadius: 8.0,
+          circleColor: const Color(0xFF4A90E2).toARGB32(),
+          circleStrokeWidth: 2.5,
+          circleStrokeColor: Colors.white.toARGB32(),
+          circleOpacity: 0.95,
+        ),
+      );
+    } else {
+      _blueDotAnnotation!.geometry = Point(coordinates: Position(lng, lat));
+      await manager.update(_blueDotAnnotation!);
+    }
+  }
+
+  // ── Firestore streams ─────────────────────────────────────────────────────
   void _listenPoiCategories() {
     _categoriesSub = _firestore.collection('poi_categories').snapshots().listen(
       (snapshot) {
-        debugPrint(
-          'Loaded ${snapshot.docs.length} POI categories from Firestore',
-        );
-        final activeCategories =
-            snapshot.docs
-                .map(
-                  (doc) => PoiCategoryModel.fromFirestore(doc.data(), doc.id),
-                )
-                .where((c) => c.status.trim().toLowerCase() == 'active')
-                .toList()
-              ..sort(
-                (a, b) =>
-                    a.label.toLowerCase().compareTo(b.label.toLowerCase()),
-              );
+        final active = snapshot.docs
+            .map((d) => PoiCategoryModel.fromFirestore(d.data(), d.id))
+            .where((c) => c.status.trim().toLowerCase() == 'active')
+            .toList()
+          ..sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
 
-        debugPrint('Active POI categories: ${activeCategories.length}');
-        categories.assignAll(activeCategories);
-        chips.assignAll(['All', ...activeCategories.map((c) => c.label)]);
-        debugPrint('Chips updated: ${chips.length} chips');
-
-        if (selectedChipIndex.value >= chips.length) {
-          selectedChipIndex.value = 0;
-        }
+        categories.assignAll(active);
+        chips.assignAll(['All', ...active.map((c) => c.label)]);
+        if (selectedChipIndex.value >= chips.length) selectedChipIndex.value = 0;
         _applyFiltersAndRefreshMarkers();
       },
       onError: (e) => debugPrint('Error loading categories: $e'),
@@ -94,37 +153,29 @@ class MapScreenController extends GetxController {
   }
 
   void _listenPois() {
-    _poisSub = _firestore
-        .collection('pois')
-        .snapshots()
-        .listen(
-          (snapshot) {
-            debugPrint('Loaded ${snapshot.docs.length} POIs from Firestore');
-            final activePois =
-                snapshot.docs
-                    .map((doc) => PoiModel.fromFirestore(doc.data(), doc.id))
-                    .where((p) => p.status.trim().toLowerCase() == 'active')
-                    .where((p) => p.latitude != 0 && p.longitude != 0)
-                    .toList()
-                  ..sort(
-                    (a, b) =>
-                        a.name.toLowerCase().compareTo(b.name.toLowerCase()),
-                  );
+    _poisSub = _firestore.collection('pois').snapshots().listen(
+      (snapshot) {
+        final active = snapshot.docs
+            .map((d) => PoiModel.fromFirestore(d.data(), d.id))
+            .where((p) => p.status.trim().toLowerCase() == 'active')
+            .where((p) => p.latitude != 0 && p.longitude != 0)
+            .toList()
+          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
-            debugPrint('Active POIs with coordinates: ${activePois.length}');
-            _allPois
-              ..clear()
-              ..addAll(activePois);
-            _applyFiltersAndRefreshMarkers();
-            isLoading.value = false;
-          },
-          onError: (e) {
-            debugPrint('Error loading POIs: $e');
-            isLoading.value = false;
-          },
-        );
+        _allPois
+          ..clear()
+          ..addAll(active);
+        _applyFiltersAndRefreshMarkers();
+        isLoading.value = false;
+      },
+      onError: (e) {
+        debugPrint('Error loading POIs: $e');
+        isLoading.value = false;
+      },
+    );
   }
 
+  // ── Filtering & annotations ───────────────────────────────────────────────
   String? get _selectedCategoryId {
     if (selectedChipIndex.value == 0) return null;
     final idx = selectedChipIndex.value - 1;
@@ -134,24 +185,19 @@ class MapScreenController extends GetxController {
 
   Future<void> _applyFiltersAndRefreshMarkers() async {
     final query = searchQuery.value.trim().toLowerCase();
-    final selectedCategoryId = _selectedCategoryId;
+    final catId = _selectedCategoryId;
 
-    final filteredPois = _allPois.where((poi) {
-      final matchesCategory =
-          selectedCategoryId == null || poi.categoryId == selectedCategoryId;
-      if (!matchesCategory) return false;
+    final filtered = _allPois.where((poi) {
+      if (catId != null && poi.categoryId != catId) return false;
       if (query.isEmpty) return true;
-      final categoryLabel = _findCategoryById(
-        poi.categoryId,
-      )?.label.toLowerCase();
+      final catLabel = _findCategoryById(poi.categoryId)?.label.toLowerCase();
       return poi.name.toLowerCase().contains(query) ||
           poi.description.toLowerCase().contains(query) ||
-          (categoryLabel?.contains(query) ?? false);
+          (catLabel?.contains(query) ?? false);
     }).toList();
 
-    debugPrint('Filtered POIs: ${filteredPois.length}');
-
-    final baseMarkers = filteredPois.map((poi) {
+    final baseMarkers = filtered.map((poi) {
+      final metres = _distanceToPoiMetres(poi.latitude, poi.longitude);
       return MapMarkerModel(
         id: poi.id,
         title: poi.name,
@@ -165,21 +211,29 @@ class MapScreenController extends GetxController {
         top: 0,
         left: 0,
         checkpointImage: AppImages.image1,
-        distance: _formatDistance(poi.latitude, poi.longitude),
-        estimatedTime: _formatTime(poi.latitude, poi.longitude),
+        distance: VincentyUtil.formatDistance(metres),
+        estimatedTime: VincentyUtil.formatEta(metres),
       );
     }).toList();
 
     markers.assignAll(baseMarkers);
     await _updateMapAnnotations(baseMarkers);
 
-    final currentSelectedId = selectedMarker.value?.id;
-    if (currentSelectedId != null) {
-      selectedMarker.value = _findMarkerById(baseMarkers, currentSelectedId);
-      if (selectedMarker.value == null) {
-        currentCard.value = MapBottomCardType.none;
-      }
+    final currentId = selectedMarker.value?.id;
+    if (currentId != null) {
+      selectedMarker.value = _findMarkerById(baseMarkers, currentId);
+      if (selectedMarker.value == null) currentCard.value = MapBottomCardType.none;
     }
+  }
+
+  double _distanceToPoiMetres(double poiLat, double poiLng) {
+    final fromLat = userLat.value ??
+        _cameraLat ??
+        MapPackageModel.minLat + (MapPackageModel.maxLat - MapPackageModel.minLat) / 2;
+    final fromLng = userLng.value ??
+        _cameraLng ??
+        MapPackageModel.minLng + (MapPackageModel.maxLng - MapPackageModel.minLng) / 2;
+    return VincentyUtil.distanceMetres(fromLat, fromLng, poiLat, poiLng);
   }
 
   Future<void> _updateMapAnnotations(List<MapMarkerModel> markerList) async {
@@ -187,20 +241,18 @@ class MapScreenController extends GetxController {
     if (manager == null) return;
 
     _annotations.clear();
-    _currentMarkers.clear();
-    _currentMarkers.addAll(markerList);
+    _currentMarkers
+      ..clear()
+      ..addAll(markerList);
     await manager.deleteAll();
-
     if (markerList.isEmpty) return;
 
     final iconSize = _iconSizeForZoom(_currentZoom);
     final options = await Future.wait(
-      markerList.map((marker) async {
-        final iconBytes = await _buildMarkerIcon(marker.title, marker.subtitle);
+      markerList.map((m) async {
+        final iconBytes = await _buildMarkerIcon(m.title, m.subtitle);
         return PointAnnotationOptions(
-          geometry: Point(
-            coordinates: Position(marker.longitude, marker.latitude),
-          ),
+          geometry: Point(coordinates: Position(m.longitude, m.latitude)),
           image: iconBytes,
           iconSize: iconSize,
           iconAnchor: IconAnchor.BOTTOM,
@@ -210,21 +262,16 @@ class MapScreenController extends GetxController {
 
     final created = await manager.createMulti(options);
     _annotations.addAll(created.whereType<PointAnnotation>());
-    debugPrint(
-      'Created ${_annotations.length} map annotations at iconSize=$iconSize',
-    );
   }
 
-  double _iconSizeForZoom(double zoom) {
-    return ((zoom - 8.0) * (0.6 / 6.0) + 0.6).clamp(0.35, 1.2);
-  }
+  double _iconSizeForZoom(double zoom) =>
+      ((zoom - 8.0) * (0.6 / 6.0) + 0.6).clamp(0.35, 1.2);
 
   Future<void> _updateAnnotationSizes() async {
     final manager = _annotationManager;
     if (manager == null || _annotations.isEmpty) return;
     final iconSize = _iconSizeForZoom(_currentZoom);
-    final snapshot = List<PointAnnotation>.from(_annotations);
-    for (final annotation in snapshot) {
+    for (final annotation in List<PointAnnotation>.from(_annotations)) {
       if (!_annotations.contains(annotation)) return;
       try {
         annotation.iconSize = iconSize;
@@ -236,169 +283,13 @@ class MapScreenController extends GetxController {
     }
   }
 
-  double _haversineKm(double lat1, double lon1, double lat2, double lon2) {
-    const r = 6371.0;
-    final dLat = (lat2 - lat1) * math.pi / 180;
-    final dLon = (lon2 - lon1) * math.pi / 180;
-    final a =
-        math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(lat1 * math.pi / 180) *
-            math.cos(lat2 * math.pi / 180) *
-            math.sin(dLon / 2) *
-            math.sin(dLon / 2);
-    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-    return r * c;
-  }
-
-  String _formatDistance(double poiLat, double poiLng) {
-    final camLat =
-        _cameraLat ??
-        MapPackageModel.minLat +
-            (MapPackageModel.maxLat - MapPackageModel.minLat) / 2;
-    final camLng =
-        _cameraLng ??
-        MapPackageModel.minLng +
-            (MapPackageModel.maxLng - MapPackageModel.minLng) / 2;
-    final km = _haversineKm(camLat, camLng, poiLat, poiLng);
-    if (km < 1) return '${(km * 1000).round()} m';
-    return '${km.toStringAsFixed(1)} km';
-  }
-
-  String _formatTime(double poiLat, double poiLng) {
-    final camLat =
-        _cameraLat ??
-        MapPackageModel.minLat +
-            (MapPackageModel.maxLat - MapPackageModel.minLat) / 2;
-    final camLng =
-        _cameraLng ??
-        MapPackageModel.minLng +
-            (MapPackageModel.maxLng - MapPackageModel.minLng) / 2;
-    final km = _haversineKm(camLat, camLng, poiLat, poiLng);
-    final minutes = (km / 5.0 * 60).round();
-    if (minutes < 60) return '$minutes min';
-    final h = minutes ~/ 60;
-    final m = minutes % 60;
-    return m == 0 ? '${h}h' : '${h}h ${m}min';
-  }
-
-  Future<Uint8List> _buildMarkerIcon(String title, String subtitle) async {
-    const double w = 260;
-    const double h = 88;
-    const double r = 44;
-    const double avatarR = 30;
-    const double avatarCx = 52;
-    const double avatarCy = h / 2;
-    const double tailW = 14;
-    const double tailH = 14;
-
-    final recorder = ui.PictureRecorder();
-    final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, w, h + tailH));
-
-    // Shadow
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(4, 4, w - 8, h),
-        const Radius.circular(r),
-      ),
-      Paint()
-        ..color = const Color(0x40000000)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
-    );
-
-    // White pill
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, 0, w, h),
-        const Radius.circular(r),
-      ),
-      Paint()..color = const Color(0xFFFFFFFF),
-    );
-
-    // Tail
-    canvas.drawPath(
-      Path()
-        ..moveTo(w / 2 - tailW, h)
-        ..lineTo(w / 2, h + tailH)
-        ..lineTo(w / 2 + tailW, h)
-        ..close(),
-      Paint()..color = const Color(0xFFFFFFFF),
-    );
-
-    // Avatar circle
-    canvas.drawCircle(
-      const Offset(avatarCx, avatarCy),
-      avatarR,
-      Paint()..color = const Color(0xFFE9E9E9),
-    );
-
-    // Location pin icon
-    final iconPaint = Paint()..color = const Color(0xFF334155);
-    canvas.drawCircle(const Offset(avatarCx, avatarCy - 6), 12, iconPaint);
-    canvas.drawPath(
-      Path()
-        ..moveTo(avatarCx - 7, avatarCy + 4)
-        ..lineTo(avatarCx, avatarCy + 16)
-        ..lineTo(avatarCx + 7, avatarCy + 4)
-        ..close(),
-      iconPaint,
-    );
-
-    // Title
-    final titlePainter = TextPainter(
-      text: TextSpan(
-        text: title,
-        style: const TextStyle(
-          color: Color(0xFF111111),
-          fontSize: 22,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-      textDirection: ui.TextDirection.ltr,
-      maxLines: 1,
-      ellipsis: '…',
-    )..layout(maxWidth: w - avatarCx * 2 - 20);
-    titlePainter.paint(
-      canvas,
-      Offset(avatarCx * 2 + 8, avatarCy - titlePainter.height - 3),
-    );
-
-    // Subtitle
-    if (subtitle.isNotEmpty) {
-      final subtitlePainter = TextPainter(
-        text: TextSpan(
-          text: subtitle,
-          style: const TextStyle(color: Color(0xFF6D6D6D), fontSize: 16),
-        ),
-        textDirection: ui.TextDirection.ltr,
-        maxLines: 1,
-        ellipsis: '…',
-      )..layout(maxWidth: w - avatarCx * 2 - 20);
-      subtitlePainter.paint(canvas, Offset(avatarCx * 2 + 8, avatarCy + 5));
-    }
-
-    final picture = recorder.endRecording();
-    final image = await picture.toImage(w.toInt(), (h + tailH).toInt());
-    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-    return bytes!.buffer.asUint8List();
-  }
-
-  PoiCategoryModel? _findCategoryById(String id) {
-    for (final category in categories) {
-      if (category.id == id) return category;
-    }
-    return null;
-  }
-
-  MapMarkerModel? _findMarkerById(List<MapMarkerModel> list, String id) {
-    for (final marker in list) {
-      if (marker.id == id) return marker;
-    }
-    return null;
-  }
-
+  // ── Map callbacks ─────────────────────────────────────────────────────────
   Future<void> onMapCreated(MapboxMap map) async {
     mapboxMap = map;
     _annotationManager = await map.annotations.createPointAnnotationManager();
+    _blueDotManager = await map.annotations.createCircleAnnotationManager();
+
+    // ignore: deprecated_member_use
     _annotationManager?.addOnPointAnnotationClickListener(
       _AnnotationClickListener(
         onAnnotationClick: (annotation) {
@@ -411,31 +302,46 @@ class MapScreenController extends GetxController {
         },
       ),
     );
+
     map.setCamera(CameraOptions(zoom: _currentZoom));
     await _applyFiltersAndRefreshMarkers();
+
+    final lat = userLat.value;
+    final lng = userLng.value;
+    if (lat != null && lng != null) _updateBlueDot(lat, lng);
   }
 
   Future<void> onCameraChanged(CameraChangedEventData event) async {
     final state = await mapboxMap?.getCameraState();
     if (state == null) return;
-    final zoom = state.zoom;
     _cameraLat = state.center.coordinates.lat.toDouble();
     _cameraLng = state.center.coordinates.lng.toDouble();
+    final zoom = state.zoom;
     if ((zoom - _currentZoom).abs() < 0.2) return;
     _currentZoom = zoom;
     _zoomDebounce?.cancel();
-    _zoomDebounce = Timer(
-      const Duration(milliseconds: 150),
-      _updateAnnotationSizes,
-    );
+    _zoomDebounce = Timer(const Duration(milliseconds: 150), _updateAnnotationSizes);
   }
 
   Future<void> onMapIdle() async {}
 
-  void changeChipIndex(int index) {
-    debugPrint(
-      'Chip selected: index=$index, chip=${chips.length > index ? chips[index] : "invalid"}',
+  // ── Location button ───────────────────────────────────────────────────────
+  void onLocationTap() {
+    final lat = userLat.value;
+    final lng = userLng.value;
+    if (lat == null || lng == null) return;
+    mapboxMap?.flyTo(
+      CameraOptions(
+        center: Point(coordinates: Position(lng, lat)),
+        zoom: 14.0,
+        pitch: 0,
+      ),
+      MapAnimationOptions(duration: 800, startDelay: 0),
     );
+  }
+
+  // ── Chip / search ─────────────────────────────────────────────────────────
+  void changeChipIndex(int index) {
     selectedChipIndex.value = index;
     _applyFiltersAndRefreshMarkers();
   }
@@ -447,13 +353,10 @@ class MapScreenController extends GetxController {
       _applyFiltersAndRefreshMarkers();
       return;
     }
-    final query = value.trim().toLowerCase();
-    final matches = _allPois
-        .where((poi) => poi.name.toLowerCase().contains(query))
-        .take(5)
-        .map((poi) => poi.name)
-        .toList();
-    searchSuggestions.assignAll(matches);
+    final q = value.trim().toLowerCase();
+    searchSuggestions.assignAll(
+      _allPois.where((p) => p.name.toLowerCase().contains(q)).take(5).map((p) => p.name),
+    );
     _applyFiltersAndRefreshMarkers();
   }
 
@@ -476,6 +379,7 @@ class MapScreenController extends GetxController {
     onMarkerTap(marker);
   }
 
+  // ── Marker interaction ────────────────────────────────────────────────────
   void onMarkerTap(MapMarkerModel marker) {
     if (marker.isLocked) {
       lockedMarker.value = marker;
@@ -486,10 +390,13 @@ class MapScreenController extends GetxController {
     lockedMarker.value = null;
     selectedMarker.value = marker;
     currentCard.value = MapBottomCardType.selectedCheckpoint;
+    _refreshEta();
   }
 
   void onCloseSelectedCheckpoint() {
     selectedMarker.value = null;
+    liveDistance.value = '';
+    liveEta.value = '';
     currentCard.value = MapBottomCardType.none;
   }
 
@@ -508,25 +415,105 @@ class MapScreenController extends GetxController {
   void onCloseCampDetail() => currentCard.value = MapBottomCardType.none;
   void onCloseStageGuide() => currentCard.value = MapBottomCardType.none;
   void onMapTap() {}
-  void onLocationTap() {}
   void onDirectionTap() {}
 
-  @override
-  void onClose() {
-    _zoomDebounce?.cancel();
-    _poisSub?.cancel();
-    _categoriesSub?.cancel();
-    super.onClose();
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  PoiCategoryModel? _findCategoryById(String id) {
+    for (final c in categories) {
+      if (c.id == id) return c;
+    }
+    return null;
+  }
+
+  MapMarkerModel? _findMarkerById(List<MapMarkerModel> list, String id) {
+    for (final m in list) {
+      if (m.id == id) return m;
+    }
+    return null;
+  }
+
+  Future<Uint8List> _buildMarkerIcon(String title, String subtitle) async {
+    const double w = 260, h = 88, r = 44;
+    const double avatarR = 30, avatarCx = 52, avatarCy = h / 2;
+    const double tailW = 14, tailH = 14;
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, w, h + tailH));
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(4, 4, w - 8, h), const Radius.circular(r)),
+      Paint()
+        ..color = const Color(0x40000000)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, w, h), const Radius.circular(r)),
+      Paint()..color = const Color(0xFFFFFFFF),
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(w / 2 - tailW, h)
+        ..lineTo(w / 2, h + tailH)
+        ..lineTo(w / 2 + tailW, h)
+        ..close(),
+      Paint()..color = const Color(0xFFFFFFFF),
+    );
+    canvas.drawCircle(
+      const Offset(avatarCx, avatarCy),
+      avatarR,
+      Paint()..color = const Color(0xFFE9E9E9),
+    );
+    final iconPaint = Paint()..color = const Color(0xFF334155);
+    canvas.drawCircle(const Offset(avatarCx, avatarCy - 6), 12, iconPaint);
+    canvas.drawPath(
+      Path()
+        ..moveTo(avatarCx - 7, avatarCy + 4)
+        ..lineTo(avatarCx, avatarCy + 16)
+        ..lineTo(avatarCx + 7, avatarCy + 4)
+        ..close(),
+      iconPaint,
+    );
+
+    final titlePainter = TextPainter(
+      text: TextSpan(
+        text: title,
+        style: const TextStyle(
+          color: Color(0xFF111111),
+          fontSize: 22,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      textDirection: ui.TextDirection.ltr,
+      maxLines: 1,
+      ellipsis: '…',
+    )..layout(maxWidth: w - avatarCx * 2 - 20);
+    titlePainter.paint(canvas, Offset(avatarCx * 2 + 8, avatarCy - titlePainter.height - 3));
+
+    if (subtitle.isNotEmpty) {
+      final subtitlePainter = TextPainter(
+        text: TextSpan(
+          text: subtitle,
+          style: const TextStyle(color: Color(0xFF6D6D6D), fontSize: 16),
+        ),
+        textDirection: ui.TextDirection.ltr,
+        maxLines: 1,
+        ellipsis: '…',
+      )..layout(maxWidth: w - avatarCx * 2 - 20);
+      subtitlePainter.paint(canvas, Offset(avatarCx * 2 + 8, avatarCy + 5));
+    }
+
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(w.toInt(), (h + tailH).toInt());
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    return bytes!.buffer.asUint8List();
   }
 }
 
+// ignore: deprecated_member_use
 class _AnnotationClickListener extends OnPointAnnotationClickListener {
   final void Function(PointAnnotation) onAnnotationClick;
-
   _AnnotationClickListener({required this.onAnnotationClick});
 
   @override
-  void onPointAnnotationClick(PointAnnotation annotation) {
-    onAnnotationClick(annotation);
-  }
+  void onPointAnnotationClick(PointAnnotation annotation) => onAnnotationClick(annotation);
 }

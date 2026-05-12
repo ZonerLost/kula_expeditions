@@ -149,6 +149,8 @@ class MapScreenView extends GetView<MapScreenController> {
                       : SelectedCheckpointCard(
                           marker: controller.selectedMarker.value!,
                           onClose: controller.onCloseSelectedCheckpoint,
+                          liveDistance: controller.liveDistance.value,
+                          liveEta: controller.liveEta.value,
                         );
 
                 case MapBottomCardType.none:

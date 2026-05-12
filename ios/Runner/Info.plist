@@ -47,5 +47,9 @@
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Allow access to pick passport and visa images for permit submission.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Kula uses your location to show your position on the trail map and calculate distance to checkpoints.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Kula uses your location to track your position on the trail, even in airplane mode.</string>
 </dict>
 </plist>

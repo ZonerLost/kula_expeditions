@@ -1,21 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:kuala_exp/extension/context_extension.dart';
-import '../../../constants/app_colors.dart';
-import '../../../constants/app_text_styles.dart';
+import '../constants/app_colors.dart';
+import '../constants/app_text_styles.dart';
 import '../modules/map/model/map_marker_model.dart';
 
 class SelectedCheckpointCard extends StatelessWidget {
   final MapMarkerModel marker;
   final VoidCallback onClose;
+  final String? liveDistance;
+  final String? liveEta;
 
   const SelectedCheckpointCard({
     super.key,
     required this.marker,
     required this.onClose,
+    this.liveDistance,
+    this.liveEta,
   });
 
   @override
   Widget build(BuildContext context) {
+    final distance = liveDistance?.isNotEmpty == true ? liveDistance! : marker.distance;
+    final eta = liveEta?.isNotEmpty == true ? liveEta! : marker.estimatedTime;
+
     return Positioned(
       left: 0,
       right: 0,
@@ -31,11 +38,7 @@ class SelectedCheckpointCard extends StatelessWidget {
           color: AppColors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
           boxShadow: [
-            BoxShadow(
-              color: Color(0x18000000),
-              blurRadius: 12,
-              offset: Offset(0, -2),
-            ),
+            BoxShadow(color: Color(0x18000000), blurRadius: 12, offset: Offset(0, -2)),
           ],
         ),
         child: Column(
@@ -46,20 +49,13 @@ class SelectedCheckpointCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    "Next Checkpoint:",
-                    style: AppTextStyles.title.copyWith(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    'Next Checkpoint:',
+                    style: AppTextStyles.title.copyWith(fontSize: 14, fontWeight: FontWeight.w700),
                   ),
                 ),
                 GestureDetector(
                   onTap: onClose,
-                  child: const Icon(
-                    Icons.close,
-                    size: 18,
-                    color: AppColors.black,
-                  ),
+                  child: const Icon(Icons.close, size: 18, color: AppColors.black),
                 ),
               ],
             ),
@@ -78,7 +74,7 @@ class SelectedCheckpointCard extends StatelessWidget {
                     child: Image(
                       image: marker.imageUrl.isNotEmpty
                           ? NetworkImage(marker.imageUrl)
-                          : AssetImage(marker.checkpointImage),
+                          : AssetImage(marker.checkpointImage) as ImageProvider,
                       width: context.screenWidth * 0.13,
                       height: context.screenWidth * 0.13,
                       fit: BoxFit.cover,
@@ -100,19 +96,13 @@ class SelectedCheckpointCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          "Distance: ${marker.distance}",
-                          style: AppTextStyles.small.copyWith(
-                            fontSize: 11,
-                            color: AppColors.greyText,
-                          ),
+                          'Distance: $distance',
+                          style: AppTextStyles.small.copyWith(fontSize: 11, color: AppColors.greyText),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          "Estimated Time: ${marker.estimatedTime}",
-                          style: AppTextStyles.small.copyWith(
-                            fontSize: 11,
-                            color: AppColors.greyText,
-                          ),
+                          'ETA: $eta',
+                          style: AppTextStyles.small.copyWith(fontSize: 11, color: AppColors.greyText),
                         ),
                       ],
                     ),
