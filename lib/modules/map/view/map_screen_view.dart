@@ -141,19 +141,24 @@ class MapScreenView extends GetView<MapScreenController> {
                         );
 
                 case MapBottomCardType.stageGuide:
-                  return StageGuideCard(onClose: controller.onCloseStageGuide);
+                  return StageGuideCard(
+                    onClose: controller.onCloseStageGuide,
+                    stages: controller.orderedStages,
+                  );
 
                 case MapBottomCardType.selectedCheckpoint:
                   return controller.selectedMarker.value == null
                       ? const SizedBox.shrink()
-                      : Obx(() => SelectedCheckpointCard(
+                      : Obx(
+                          () => SelectedCheckpointCard(
                             marker: controller.selectedMarker.value!,
                             onClose: controller.onCloseSelectedCheckpoint,
                             liveDistance: controller.liveDistance.value,
                             liveEta: controller.liveEta.value,
                             poiMarker: controller.poiMarker.value,
                             onClosePoi: controller.onClosePoiMarker,
-                          ));
+                          ),
+                        );
 
                 case MapBottomCardType.none:
                   return const SizedBox.shrink();

@@ -5,7 +5,6 @@ import 'package:get/get.dart';
 import 'package:kuala_exp/firebase_options.dart';
 import 'package:kuala_exp/routes/app_pages.dart';
 import 'package:kuala_exp/routes/app_routes.dart';
-
 import 'constants/bottom_nav_bar/bottom_nav_controller.dart';
 
 void main() async {

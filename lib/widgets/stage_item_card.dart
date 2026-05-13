@@ -99,7 +99,7 @@ class _StageInfo extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                stage.title,
+                stage.stageDisplayTitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.body.copyWith(
@@ -124,6 +124,10 @@ class _StageInfo extends StatelessWidget {
           ],
         ),
         SizedBox(height: context.screenHeight * 0.004),
+        // if (stage.stageRouteLabel.isNotEmpty) ...[
+        //   Text(stage.stageRouteLabel, style: smallStyle),
+        //   SizedBox(height: context.screenHeight * 0.002),
+        // ],
         Text("Distance: ${stage.distanceLabel}", style: smallStyle),
         SizedBox(height: context.screenHeight * 0.002),
         Text("Estimated Time: ${stage.estimatedTimeLabel}", style: smallStyle),

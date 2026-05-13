@@ -1,9 +1,11 @@
 // lib/modules/permit/controller/permit_controller.dart
 
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -90,6 +92,9 @@ class PermitController extends GetxController {
   final visaFileName = ''.obs;
   PlatformFile? _passportFile;
   PlatformFile? _visaFile;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+  bool _isWifiConnected = false;
+  bool _isWifiPermitSyncRunning = false;
 
   static const String permitVerifyBaseUrl =
       'https://yourdomain.com/verify-permit';
@@ -101,10 +106,12 @@ class PermitController extends GetxController {
   void onInit() {
     super.onInit();
     loadMyPermits();
+    _watchWifiAndRefreshPermits();
   }
 
   @override
   void onClose() {
+    _connectivitySub?.cancel();
     fullNameController.dispose();
     passportController.dispose();
     dobController.dispose();
@@ -463,6 +470,42 @@ class PermitController extends GetxController {
 
   Future<void> refreshPermits() async {
     await loadMyPermits();
+  }
+
+  Future<void> _watchWifiAndRefreshPermits() async {
+    final connectivity = Connectivity();
+    try {
+      final results = await connectivity.checkConnectivity();
+      _isWifiConnected = results.contains(ConnectivityResult.wifi);
+      if (_isWifiConnected) {
+        await _refreshSavedPermitsFromServerOnWifi();
+      }
+    } catch (e) {
+      debugPrint('[Permit][WiFi] Initial connectivity check failed: $e');
+    }
+
+    _connectivitySub = connectivity.onConnectivityChanged.listen((results) {
+      final hasWifi = results.contains(ConnectivityResult.wifi);
+      final justConnectedToWifi = hasWifi && !_isWifiConnected;
+      _isWifiConnected = hasWifi;
+      if (justConnectedToWifi) {
+        _refreshSavedPermitsFromServerOnWifi();
+      }
+    });
+  }
+
+  Future<void> _refreshSavedPermitsFromServerOnWifi() async {
+    if (_isWifiPermitSyncRunning) return;
+    if (savedPermitIds.isEmpty) return;
+    _isWifiPermitSyncRunning = true;
+    try {
+      await refreshPermits();
+      debugPrint('[Permit][WiFi] Synced saved permits from server');
+    } catch (e) {
+      debugPrint('[Permit][WiFi] Sync failed: $e');
+    } finally {
+      _isWifiPermitSyncRunning = false;
+    }
   }
 
   String generateQrPayload(permit_entity.PermitModel permit) {

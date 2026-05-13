@@ -19,6 +19,8 @@ class StageModel {
   final double startLon;
   final double endLat;
   final double endLon;
+  final String startName;
+  final String endName;
 
   const StageModel({
     required this.id,
@@ -41,6 +43,8 @@ class StageModel {
     required this.startLon,
     required this.endLat,
     required this.endLon,
+    required this.startName,
+    required this.endName,
   });
 
   factory StageModel.fromFirestore(Map<String, dynamic> data, String id) {
@@ -65,6 +69,8 @@ class StageModel {
       startLon: _toDouble(data['startLon']),
       endLat: _toDouble(data['endLat']),
       endLon: _toDouble(data['endLon']),
+      startName: (data['startName'] ?? '').toString(),
+      endName: (data['endName'] ?? '').toString(),
     );
   }
 
@@ -90,6 +96,8 @@ class StageModel {
       startLon: _toDouble(data['startLon']),
       endLat: _toDouble(data['endLat']),
       endLon: _toDouble(data['endLon']),
+      startName: (data['startName'] ?? '').toString(),
+      endName: (data['endName'] ?? '').toString(),
     );
   }
 
@@ -115,7 +123,24 @@ class StageModel {
       'startLon': startLon,
       'endLat': endLat,
       'endLon': endLon,
+      'startName': startName,
+      'endName': endName,
     };
+  }
+
+  String get stageRouteLabel {
+    final from = startName.trim();
+    final to = endName.trim();
+    if (from.isNotEmpty && to.isNotEmpty) return '$from -> $to';
+    if (from.isNotEmpty) return from;
+    if (to.isNotEmpty) return to;
+    return '';
+  }
+
+  String get stageDisplayTitle {
+    final route = stageRouteLabel;
+    if (route.isNotEmpty) return 'Stage $order: $route';
+    return title;
   }
 
   String get distanceLabel => '$distanceKm km';

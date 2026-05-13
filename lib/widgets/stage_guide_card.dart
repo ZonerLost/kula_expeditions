@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:kuala_exp/extension/context_extension.dart';
+
 import '../../../constants/app_colors.dart';
 import '../../../constants/app_imges.dart';
 import '../../../constants/app_text_styles.dart';
+import '../modules/stages/model/stage_model.dart';
 
 class StageGuideCard extends StatelessWidget {
   final VoidCallback onClose;
+  final List<StageModel> stages;
 
   const StageGuideCard({
     super.key,
     required this.onClose,
+    required this.stages,
   });
 
   @override
@@ -27,9 +31,7 @@ class StageGuideCard extends StatelessWidget {
         ),
         decoration: const BoxDecoration(
           color: AppColors.white,
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(22),
-          ),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
           boxShadow: [
             BoxShadow(
               color: Color(0x18000000),
@@ -64,29 +66,32 @@ class StageGuideCard extends StatelessWidget {
               ],
             ),
             SizedBox(height: context.screenHeight * 0.016),
-            _guideItem(
-              context,
-              title: 'Theth → Valbona',
-              distance: '16 km',
-              time: '52 min',
-              level: 'Moderate',
-            ),
-            SizedBox(height: context.screenHeight * 0.012),
-            _guideItem(
-              context,
-              title: 'Valbona → Theth',
-              distance: '16 km',
-              time: '52 min',
-              level: 'Moderate',
-            ),
-            SizedBox(height: context.screenHeight * 0.012),
-            _guideItem(
-              context,
-              title: 'Theth → Shkodra',
-              distance: '60 km',
-              time: '1h 30 min',
-              level: 'Low',
-            ),
+            if (stages.isEmpty)
+              Text(
+                'No published stages available yet.',
+                style: AppTextStyles.small.copyWith(
+                  fontSize: 12,
+                  color: AppColors.greyText,
+                ),
+              )
+            else
+              ...List.generate(stages.length, (index) {
+                final stage = stages[index];
+                return Padding(
+                  padding: EdgeInsets.only(
+                    bottom: index == stages.length - 1
+                        ? 0
+                        : context.screenHeight * 0.012,
+                  ),
+                  child: _guideItem(
+                    context,
+                    title: 'Order ${stage.order}: ${_routeLabel(stage)}',
+                    distance: stage.distanceLabel,
+                    time: stage.estimatedTimeLabel,
+                    level: stage.difficulty,
+                  ),
+                );
+              }),
           ],
         ),
       ),
@@ -94,20 +99,18 @@ class StageGuideCard extends StatelessWidget {
   }
 
   Widget _guideItem(
-      BuildContext context, {
-        required String title,
-        required String distance,
-        required String time,
-        required String level,
-      }) {
+    BuildContext context, {
+    required String title,
+    required String distance,
+    required String time,
+    required String level,
+  }) {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.lightBorder,
-        ),
+        border: Border.all(color: AppColors.lightBorder),
       ),
       child: Row(
         children: [
@@ -158,12 +161,17 @@ class StageGuideCard extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(
-            Icons.chevron_right,
-            color: AppColors.floatingButtonIcon,
-          ),
+          const Icon(Icons.chevron_right, color: AppColors.floatingButtonIcon),
         ],
       ),
     );
+  }
+
+  String _routeLabel(StageModel stage) {
+    final from = stage.startName.trim();
+    final to = stage.endName.trim();
+    if (from.isNotEmpty && to.isNotEmpty) return '$from -> $to';
+    if (stage.stageRouteLabel.isNotEmpty) return stage.stageRouteLabel;
+    return stage.title;
   }
 }

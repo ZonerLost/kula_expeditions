@@ -4,10 +4,11 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:get/get.dart';
-import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' hide Source;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../constants/app_imges.dart';
@@ -39,7 +40,8 @@ class MapScreenController extends GetxController {
   final searchSuggestions = <String>[].obs;
   final selectedMarker = Rxn<MapMarkerModel>();
   final lockedMarker = Rxn<MapMarkerModel>();
-  final poiMarker = Rxn<MapMarkerModel>(); // POI tapped while checkpoint is shown
+  final poiMarker =
+      Rxn<MapMarkerModel>(); // POI tapped while checkpoint is shown
   final currentCard = MapBottomCardType.none.obs;
   final chips = <String>[].obs;
   final categories = <PoiCategoryModel>[].obs;
@@ -63,6 +65,7 @@ class MapScreenController extends GetxController {
   StreamSubscription<QuerySnapshot>? _categoriesSub;
   StreamSubscription<QuerySnapshot>? _stagesSub;
   StreamSubscription<geo.Position>? _gpsSub;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   Timer? _etaTimer;
   Timer? _zoomDebounce;
 
@@ -70,6 +73,7 @@ class MapScreenController extends GetxController {
   PointAnnotationManager? _annotationManager;
   CircleAnnotationManager? _blueDotManager;
   CircleAnnotation? _blueDotAnnotation;
+  CircleAnnotation? _destinationAnnotation;
 
   double _currentZoom = 8.0;
   double? _cameraLat;
@@ -81,6 +85,8 @@ class MapScreenController extends GetxController {
   bool _stageProgressLoaded = false;
   MapMarkerModel? _activeStageTargetMarker;
   SharedPreferences? _prefs;
+  bool _isWifiConnected = false;
+  bool _isWifiRefreshing = false;
 
   static const double _arrivalThresholdMetres = 80.0;
   static const String _prefsStageIndexKey = 'stage_nav_active_index';
@@ -95,6 +101,7 @@ class MapScreenController extends GetxController {
     _listenPois();
     _bootstrapStageNavigation();
     _listenStages();
+    _startWifiSyncWatcher();
     _startGps();
   }
 
@@ -103,6 +110,7 @@ class MapScreenController extends GetxController {
     _zoomDebounce?.cancel();
     _etaTimer?.cancel();
     _gpsSub?.cancel();
+    _connectivitySub?.cancel();
     _poisSub?.cancel();
     _categoriesSub?.cancel();
     _stagesSub?.cancel();
@@ -137,8 +145,27 @@ class MapScreenController extends GetxController {
   void _refreshEta() {
     final lat = userLat.value;
     final lng = userLng.value;
+    if (lat == null || lng == null) return;
+
+    // Priority: always compute checkpoint distance from current stage
+    // start/end coordinates when stage navigation is active.
+    final stage = _stageForCurrentProgress();
+    if (stage != null) {
+      final targetLat = _targetingEndPoint ? stage.endLat : stage.startLat;
+      final targetLon = _targetingEndPoint ? stage.endLon : stage.startLon;
+      final metres = VincentyUtil.distanceMetres(
+        lat,
+        lng,
+        targetLat,
+        targetLon,
+      );
+      liveDistance.value = VincentyUtil.formatDistance(metres);
+      liveEta.value = VincentyUtil.formatEta(metres);
+      return;
+    }
+
     final marker = selectedMarker.value ?? _activeStageTargetMarker;
-    if (lat == null || lng == null || marker == null) return;
+    if (marker == null) return;
 
     final metres = VincentyUtil.distanceMetres(
       lat,
@@ -169,6 +196,28 @@ class MapScreenController extends GetxController {
       _blueDotAnnotation!.geometry = Point(coordinates: Position(lng, lat));
       await manager.update(_blueDotAnnotation!);
     }
+  }
+
+  Future<void> _updateDestinationMarker(double lat, double lng) async {
+    final manager = _blueDotManager;
+    if (manager == null) return;
+
+    if (_destinationAnnotation == null) {
+      _destinationAnnotation = await manager.create(
+        CircleAnnotationOptions(
+          geometry: Point(coordinates: Position(lng, lat)),
+          circleRadius: 9.5,
+          circleColor: const Color(0xFFF97316).toARGB32(),
+          circleStrokeWidth: 2.5,
+          circleStrokeColor: Colors.white.toARGB32(),
+          circleOpacity: 0.95,
+        ),
+      );
+      return;
+    }
+
+    _destinationAnnotation!.geometry = Point(coordinates: Position(lng, lat));
+    await manager.update(_destinationAnnotation!);
   }
 
   // ── Firestore streams ─────────────────────────────────────────────────────
@@ -228,12 +277,17 @@ class MapScreenController extends GetxController {
 
   Future<void> _bootstrapStageNavigation() async {
     _prefs = await SharedPreferences.getInstance();
-    _activeStageIndex = _prefs?.getInt(_prefsStageIndexKey) ?? 0;
-    _targetingEndPoint = _prefs?.getBool(_prefsTargetingEndKey) ?? false;
+    // Always restart navigation from stage order 1 start on app launch.
+    _activeStageIndex = 0;
+    _targetingEndPoint = false;
+    await _prefs?.setInt(_prefsStageIndexKey, _activeStageIndex);
+    await _prefs?.setBool(_prefsTargetingEndKey, _targetingEndPoint);
     _stageProgressLoaded = true;
     _loadCachedStages();
     _setStageTargetMarker(flyToTarget: false);
   }
+
+  List<StageModel> get orderedStages => List.unmodifiable(_orderedStages);
 
   void _listenStages() {
     _stagesSub = _firestore
@@ -257,12 +311,59 @@ class MapScreenController extends GetxController {
             _saveStagesCache();
             _normalizeStageProgress();
             _setStageTargetMarker(flyToTarget: true);
+            _tryAdvanceStageProgressFromCurrentLocation();
           },
           onError: (e) {
             debugPrint('Error loading stages: $e');
             _setStageTargetMarker(flyToTarget: false);
           },
         );
+  }
+
+  Future<void> _startWifiSyncWatcher() async {
+    final connectivity = Connectivity();
+    try {
+      final results = await connectivity.checkConnectivity();
+      _isWifiConnected = results.contains(ConnectivityResult.wifi);
+      if (_isWifiConnected) {
+        await _refreshTrailDataFromServer();
+      }
+    } catch (e) {
+      debugPrint('[Map][WiFi] Initial connectivity check failed: $e');
+    }
+
+    _connectivitySub = connectivity.onConnectivityChanged.listen((results) {
+      final hasWifi = results.contains(ConnectivityResult.wifi);
+      final justConnectedToWifi = hasWifi && !_isWifiConnected;
+      _isWifiConnected = hasWifi;
+      if (justConnectedToWifi) {
+        _refreshTrailDataFromServer();
+      }
+    });
+  }
+
+  Future<void> _refreshTrailDataFromServer() async {
+    if (_isWifiRefreshing) return;
+    _isWifiRefreshing = true;
+    try {
+      await Future.wait([
+        _firestore
+            .collection('poi_categories')
+            .get(const GetOptions(source: Source.server)),
+        _firestore
+            .collection('pois')
+            .get(const GetOptions(source: Source.server)),
+        _firestore
+            .collection('stages')
+            .orderBy('order')
+            .get(const GetOptions(source: Source.server)),
+      ]);
+      debugPrint('[Map][WiFi] Synced POIs and stages from server');
+    } catch (e) {
+      debugPrint('[Map][WiFi] Sync skipped/failed: $e');
+    } finally {
+      _isWifiRefreshing = false;
+    }
   }
 
   // ── Filtering & annotations ───────────────────────────────────────────────
@@ -413,6 +514,10 @@ class MapScreenController extends GetxController {
     final lat = userLat.value;
     final lng = userLng.value;
     if (lat != null && lng != null) _updateBlueDot(lat, lng);
+    final destination = _activeStageTargetMarker;
+    if (destination != null) {
+      _updateDestinationMarker(destination.latitude, destination.longitude);
+    }
     _centerOnUserAtStartup(durationMs: 0);
     _setStageTargetMarker(flyToTarget: false);
   }
@@ -590,8 +695,12 @@ class MapScreenController extends GetxController {
     final targetLat = isEndTarget ? stage.endLat : stage.startLat;
     final targetLon = isEndTarget ? stage.endLon : stage.startLon;
     final targetName = isEndTarget
-        ? _extractStageEndName(stage.title)
-        : _extractStageStartName(stage.title);
+        ? (stage.endName.trim().isNotEmpty
+              ? stage.endName.trim()
+              : _extractStageEndName(stage.title))
+        : (stage.startName.trim().isNotEmpty
+              ? stage.startName.trim()
+              : _extractStageStartName(stage.title));
     _activeStageTargetMarker = MapMarkerModel(
       id: 'stage-${stage.id}-${isEndTarget ? 'end' : 'start'}',
       title: targetName,
@@ -612,6 +721,7 @@ class MapScreenController extends GetxController {
     );
     selectedMarker.value = _activeStageTargetMarker;
     currentCard.value = MapBottomCardType.selectedCheckpoint;
+    _updateDestinationMarker(targetLat, targetLon);
     _refreshEta();
     if (flyToTarget) {
       _flyToActiveStageTarget();
@@ -698,6 +808,13 @@ class MapScreenController extends GetxController {
       return;
     }
     _persistStageProgress();
+  }
+
+  void _tryAdvanceStageProgressFromCurrentLocation() {
+    final lat = userLat.value;
+    final lng = userLng.value;
+    if (lat == null || lng == null) return;
+    _advanceStageProgressIfArrived(lat, lng);
   }
 
   String _extractStageStartName(String stageTitle) {
